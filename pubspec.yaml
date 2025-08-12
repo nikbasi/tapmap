@@ -1,0 +1,65 @@
+name: water_fountain_finder
+description: A cross-platform app to find drinkable water spots worldwide
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+  flutter: ">=3.10.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # State Management
+  provider: ^6.1.1
+  
+  # Firebase
+  firebase_core: ^2.24.2
+  firebase_auth: ^4.15.3
+  cloud_firestore: ^4.13.6
+  firebase_storage: ^11.5.6
+  
+  # Maps & Location
+  mapbox_gl: ^0.18.0
+  geolocator: ^10.1.0
+  geocoding: ^2.1.1
+  
+  # UI Components
+  cupertino_icons: ^1.0.2
+  flutter_svg: ^2.0.9
+  cached_network_image: ^3.3.0
+  
+  # Utilities
+  http: ^1.1.0
+  shared_preferences: ^2.2.2
+  permission_handler: ^11.1.0
+  image_picker: ^1.0.4
+  
+  # OAuth
+  google_sign_in: ^6.1.6
+  sign_in_with_apple: ^5.0.0
+  
+  # Others
+  intl: ^0.18.1
+  url_launcher: ^6.2.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+  
+  assets:
+    - assets/images/
+    - assets/icons/
+    - assets/maps/
+  
+  fonts:
+    - family: Roboto
+      fonts:
+        - asset: assets/fonts/Roboto-Regular.ttf
+        - asset: assets/fonts/Roboto-Bold.ttf
+          weight: 700
