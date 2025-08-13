@@ -6,6 +6,7 @@ import 'package:water_fountain_finder/providers/fountain_provider.dart';
 import 'package:water_fountain_finder/providers/location_provider.dart';
 import 'package:water_fountain_finder/models/fountain.dart';
 import 'package:water_fountain_finder/utils/constants.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class AddFountainScreen extends StatefulWidget {
   const AddFountainScreen({super.key});
@@ -290,7 +291,7 @@ class _AddFountainScreenState extends State<AddFountainScreen> {
                 items: FountainType.values.map((type) {
                   return DropdownMenuItem(
                     value: type,
-                    child: Text(type.displayName),
+                    child: Text(type.name.toUpperCase()),
                   );
                 }).toList(),
                 onChanged: (value) {
@@ -309,7 +310,7 @@ class _AddFountainScreenState extends State<AddFountainScreen> {
                 items: WaterQuality.values.map((quality) {
                   return DropdownMenuItem(
                     value: quality,
-                    child: Text(quality.displayName),
+                    child: Text(quality.name.toUpperCase()),
                   );
                 }).toList(),
                 onChanged: (value) {
@@ -328,7 +329,7 @@ class _AddFountainScreenState extends State<AddFountainScreen> {
                 items: Accessibility.values.map((accessibility) {
                   return DropdownMenuItem(
                     value: accessibility,
-                    child: Text(accessibility.displayName),
+                    child: Text(accessibility.name.toUpperCase()),
                   );
                 }).toList(),
                 onChanged: (value) {

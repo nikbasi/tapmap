@@ -18,18 +18,20 @@ A cross-platform mobile app that helps tourists and locals find drinkable water 
 - **Authentication**: Built-in OAuth providers
 - **Hosting**: Free hosting for web version
 
-## Map Provider: OpenStreetMap + Mapbox
+## Map Provider: OpenStreetMap
 
-### Why OpenStreetMap + Mapbox?
-- **OpenStreetMap**: Free, worldwide coverage, community-driven
-- **Mapbox**: Affordable pricing ($5/50,000 map loads/month), excellent Flutter support
+### Why OpenStreetMap?
+- **Free and Open-Source**: No API costs or usage limits
+- **Worldwide Coverage**: Community-driven map data
+- **Excellent Flutter Support**: Multiple Flutter packages available
+- **No Authentication**: Simple setup, no API keys required
 - **Alternative**: Google Maps (expensive: $7/1000 map loads/month)
 
 ## Architecture
 
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Flutter App  │    │   Firebase      │    │   Mapbox API    │
+│   Flutter App  │    │   Firebase      │    │   OpenStreetMap │
 │                 │    │   Backend       │    │                 │
 ├─────────────────┤    ├─────────────────┤    ├─────────────────┤
 │ • UI Layer     │    │ • Authentication│    │ • Map Tiles     │
@@ -125,13 +127,13 @@ A cross-platform mobile app that helps tourists and locals find drinkable water 
 ### Development Costs
 - **Flutter**: Free
 - **Firebase**: Free tier (generous), then pay-as-you-go
-- **Mapbox**: $5/month for 50,000 map loads
+- **OpenStreetMap**: Free (no API costs)
 - **Development**: 7 weeks × 40 hours = 280 hours
-- **Total Estimated Cost**: $50-200/month for infrastructure
+- **Total Estimated Cost**: $0-150/month for infrastructure (Firebase only)
 
 ### Free Tier Limits
 - **Firebase**: 1GB storage, 50,000 reads/day, 20,000 writes/day
-- **Mapbox**: 50,000 map loads/month
+- **OpenStreetMap**: No usage limits
 - **Firebase Hosting**: 10GB storage, 360MB/day transfer
 
 ## Risk Mitigation

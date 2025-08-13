@@ -70,20 +70,22 @@ This guide will walk you through setting up the development environment for the 
      - Download `GoogleService-Info.plist`
      - Place in `ios/Runner/`
 
-### 4. Mapbox Setup
+### 4. OpenStreetMap Setup
 
-1. **Create Mapbox Account**
-   - Go to [mapbox.com](https://www.mapbox.com/)
-   - Sign up for a free account
-   - Verify your email
+1. **No Account Required**
+   - OpenStreetMap is free and open-source
+   - No API keys or authentication needed
+   - Uses standard tile servers
 
-2. **Get Access Token**
-   - Go to Account > Access tokens
-   - Copy your default public token
-   - Update `lib/utils/constants.dart`:
-     ```dart
-     static const String mapboxAccessToken = 'YOUR_TOKEN_HERE';
-     ```
+2. **Tile Server Configuration**
+   - The app is configured to use the default OpenStreetMap tile server
+   - URL: `https://tile.openstreetmap.org/{z}/{x}/{y}.png`
+   - Attribution: `© OpenStreetMap contributors`
+
+3. **Usage Limits**
+   - OpenStreetMap has generous usage limits
+   - No cost for standard usage
+   - Consider using a tile server provider for high-traffic apps
 
 ### 5. Platform-Specific Setup
 

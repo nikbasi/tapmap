@@ -75,9 +75,9 @@ class AppStrings {
 }
 
 class AppConfig {
-  // Mapbox Configuration
-  static const String mapboxAccessToken = 'YOUR_MAPBOX_ACCESS_TOKEN';
-  static const String mapboxStyleUrl = 'mapbox://styles/mapbox/streets-v11';
+  // OpenStreetMap Configuration
+  static const String osmTileUrl = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+  static const String osmAttribution = '© OpenStreetMap contributors';
   
   // Firebase Configuration
   static const String firebaseProjectId = 'YOUR_FIREBASE_PROJECT_ID';

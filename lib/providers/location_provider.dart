@@ -1,5 +1,7 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 class LocationProvider extends ChangeNotifier {
@@ -209,19 +211,12 @@ class LocationProvider extends ChangeNotifier {
   // Get formatted address from coordinates
   Future<String?> getAddressFromCoordinates(double latitude, double longitude) async {
     try {
-      final placemarks = await Geolocator.placemarkFromCoordinates(latitude, longitude);
+      final placemarks = await placemarkFromCoordinates(latitude, longitude);
       if (placemarks.isNotEmpty) {
-        final placemark = placemarks.first;
-        final address = [
-          placemark.street,
-          placemark.locality,
-          placemark.administrativeArea,
-          placemark.country,
-        ].where((part) => part != null && part.isNotEmpty).join(', ');
-        
-        return address.isNotEmpty ? address : null;
+        final place = placemarks.first;
+        return '${place.street}, ${place.locality}, ${place.administrativeArea}, ${place.country}';
       }
-      return null;
+      return 'Lat: ${latitude.toStringAsFixed(6)}, Lon: ${longitude.toStringAsFixed(6)}';
     } catch (e) {
       _setError('Failed to get address: $e');
       return null;
@@ -229,12 +224,14 @@ class LocationProvider extends ChangeNotifier {
   }
 
   // Get coordinates from address
-  Future<Position?> getCoordinatesFromAddress(String address) async {
+  Future<({double latitude, double longitude})?> getCoordinatesFromAddress(String address) async {
     try {
-      final locations = await Geolocator.locationFromAddress(address);
+      final locations = await locationFromAddress(address);
       if (locations.isNotEmpty) {
-        return locations.first;
+        final location = locations.first;
+        return (latitude: location.latitude, longitude: location.longitude);
       }
+      _setError('Address not found');
       return null;
     } catch (e) {
       _setError('Failed to get coordinates from address: $e');
@@ -284,7 +281,7 @@ class LocationProvider extends ChangeNotifier {
   }
 
   // Open app settings
-  Future<void> openAppSettings() async {
+  Future<void> openAppSettingsPage() async {
     try {
       await openAppSettings();
     } catch (e) {

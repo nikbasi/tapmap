@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:mapbox_gl/mapbox_gl.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:water_fountain_finder/providers/fountain_provider.dart';
 import 'package:water_fountain_finder/providers/location_provider.dart';
 import 'package:water_fountain_finder/models/fountain.dart';
@@ -15,10 +16,10 @@ class MapScreen extends StatefulWidget {
 }
 
 class _MapScreenState extends State<MapScreen> {
-  MapboxMapController? _mapController;
   List<Fountain> _nearbyFountains = [];
   Fountain? _selectedFountain;
   bool _isMapReady = false;
+  final List<Marker> _markers = [];
 
   @override
   void initState() {
@@ -47,76 +48,65 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void _addFountainMarkers() {
-    if (_mapController == null || !_isMapReady) return;
-
+    _markers.clear();
+    
     for (final fountain in _nearbyFountains) {
-      _mapController!.addSymbol(
-        SymbolOptions(
-          geometry: LatLng(
+      _markers.add(
+        Marker(
+          point: LatLng(
             fountain.location.latitude,
             fountain.location.longitude,
           ),
-          iconImage: _getFountainIcon(fountain),
-          iconSize: 1.2,
-          iconAllowOverlap: true,
+          width: 40,
+          height: 40,
+          child: GestureDetector(
+            onTap: () => _onMarkerTapped(fountain),
+            child: Icon(
+              _getFountainIcon(fountain),
+              color: Colors.blue,
+              size: 30,
+            ),
+          ),
         ),
-        {
-          'fountainId': fountain.id,
-          'fountain': fountain,
-        },
       );
     }
+    
+    setState(() {});
   }
 
-  String _getFountainIcon(Fountain fountain) {
+  IconData _getFountainIcon(Fountain fountain) {
     switch (fountain.type) {
       case FountainType.fountain:
-        return 'fountain-icon';
+        return Icons.water_drop;
       case FountainType.tap:
-        return 'tap-icon';
+        return Icons.tap_and_play;
       case FountainType.refillStation:
-        return 'refill-icon';
+        return Icons.local_drink;
       default:
-        return 'fountain-icon';
+        return Icons.water_drop;
     }
   }
 
-  void _onMapCreated(MapboxMapController controller) {
-    _mapController = controller;
-    _isMapReady = true;
-    _addFountainMarkers();
-  }
-
-  void _onMapClick(Point<double> point, LatLng coordinates) {
+  void _onMapTap(TapPosition tapPosition, LatLng coordinates) {
     // Deselect fountain when clicking on empty map area
     setState(() {
       _selectedFountain = null;
     });
   }
 
-  void _onSymbolTapped(Symbol symbol) {
-    final fountain = symbol.data['fountain'] as Fountain;
+  void _onMarkerTapped(Fountain fountain) {
     setState(() {
       _selectedFountain = fountain;
     });
-  }
-
-  void _onCameraIdle() {
-    // Reload fountains when map stops moving
-    _loadNearbyFountains();
   }
 
   void _goToCurrentLocation() async {
     final locationProvider = Provider.of<LocationProvider>(context, listen: false);
     final position = await locationProvider.getCurrentLocation();
     
-    if (position != null && _mapController != null) {
-      _mapController!.animateCamera(
-        CameraUpdate.newLatLngZoom(
-          LatLng(position.latitude, position.longitude),
-          AppConfig.defaultZoom,
-        ),
-      );
+    if (position != null) {
+      // For now, just reload fountains at current location
+      await _loadNearbyFountains();
     }
   }
 
@@ -126,15 +116,6 @@ class _MapScreenState extends State<MapScreen> {
     
     if (position != null) {
       await _loadNearbyFountains();
-      
-      if (_mapController != null) {
-        _mapController!.animateCamera(
-          CameraUpdate.newLatLngZoom(
-            LatLng(position.latitude, position.longitude),
-            AppConfig.defaultZoom,
-          ),
-        );
-      }
     }
   }
 
@@ -144,20 +125,29 @@ class _MapScreenState extends State<MapScreen> {
       body: Stack(
         children: [
           // Map
-          MapboxMap(
-            accessToken: AppConfig.mapboxAccessToken,
-            styleString: AppConfig.mapboxStyleUrl,
-            onMapCreated: _onMapCreated,
-            onMapClick: _onMapClick,
-            onSymbolTapped: _onSymbolTapped,
-            onCameraIdle: _onCameraIdle,
-            initialCameraPosition: CameraPosition(
-              target: LatLng(0, 0), // Will be updated with user location
-              zoom: AppConfig.defaultZoom,
+          FlutterMap(
+            options: MapOptions(
+              initialCenter: LatLng(0, 0), // Will be updated with user location
+              initialZoom: AppConfig.defaultZoom,
+              onTap: _onMapTap,
             ),
-            myLocationEnabled: true,
-            myLocationTrackingMode: MyLocationTrackingMode.Tracking,
-            myLocationRenderMode: MyLocationRenderMode.COMPASS,
+            children: [
+              TileLayer(
+                urlTemplate: AppConfig.osmTileUrl,
+                userAgentPackageName: 'com.example.water_fountain_finder',
+                // Attributions API changed in flutter_map 6.x
+                // Provide attributions via nonRotatedChildren with an Align widget if needed
+              ),
+              MarkerLayer(markers: _markers),
+              RichAttributionWidget(
+                attributions: [
+                  TextSourceAttribution(
+                    AppConfig.osmAttribution,
+                    onTap: () {},
+                  ),
+                ],
+              ),
+            ],
           ),
 
           // Top app bar

@@ -70,9 +70,11 @@ app.*.map.json
 **/ios/Flutter/flutter_export_environment.sh
 **/ios/ServiceDefinitions.json
 **/ios/Runner/GeneratedPluginRegistrant.*
+**/ios/Flutter/ephemeral/
 
 # macOS
 **/macos/Flutter/GeneratedPluginRegistrant.swift
+**/macos/Flutter/ephemeral/
 
 # Coverage
 coverage/
@@ -100,6 +102,14 @@ mapbox_access_token.txt
 # Generated files
 *.g.dart
 *.freezed.dart
+
+# Linux
+**/linux/flutter/ephemeral/
+**/linux/flutter/GeneratedPluginRegistrant.*
+
+# Windows
+**/windows/flutter/ephemeral/
+**/windows/flutter/GeneratedPluginRegistrant.*
 
 # Temporary files
 *.tmp

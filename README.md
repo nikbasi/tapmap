@@ -16,7 +16,7 @@ A cross-platform mobile application that helps tourists and locals find drinkabl
 
 - **Frontend**: Flutter (Dart)
 - **Backend**: Firebase (Firestore, Authentication, Storage)
-- **Maps**: Mapbox API (affordable alternative to Google Maps)
+- **Maps**: OpenStreetMap (free, open-source mapping)
 - **State Management**: Provider pattern
 - **Authentication**: OAuth (Google, Apple) + Email/Password
 
@@ -55,13 +55,10 @@ A cross-platform mobile application that helps tourists and locals find drinkabl
      - Android: `android/app/google-services.json`
      - iOS: `ios/Runner/GoogleService-Info.plist`
 
-4. **Configure Mapbox**
-   - Sign up at [Mapbox](https://www.mapbox.com/)
-   - Get your access token
-   - Update `lib/utils/constants.dart`:
-     ```dart
-     static const String mapboxAccessToken = 'YOUR_MAPBOX_ACCESS_TOKEN';
-     ```
+4. **Configure OpenStreetMap**
+   - OpenStreetMap is pre-configured and requires no setup
+   - The app uses the default OpenStreetMap tile server
+   - No API keys or authentication needed
 
 5. **Configure OAuth**
    - **Google Sign-In**: Follow [Flutter Google Sign-In setup](https://pub.dev/packages/google_sign_in)
@@ -207,8 +204,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - Flutter team for the amazing framework
 - Firebase for backend services
-- Mapbox for affordable mapping solutions
-- OpenStreetMap community for open map data
+- OpenStreetMap community for free, open-source mapping
+- OpenStreetMap contributors for worldwide map data
 
 ## 📞 Support
 

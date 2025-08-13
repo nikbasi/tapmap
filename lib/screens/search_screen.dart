@@ -239,7 +239,7 @@ class _SearchScreenState extends State<SearchScreen> {
             title: 'Type',
             children: FountainType.values.map((type) {
               return FilterChip(
-                label: Text(type.displayName),
+                label: Text(type.name.toUpperCase()),
                 selected: _selectedType == type,
                 onSelected: (selected) {
                   setState(() {
@@ -258,7 +258,7 @@ class _SearchScreenState extends State<SearchScreen> {
             title: 'Water Quality',
             children: WaterQuality.values.map((quality) {
               return FilterChip(
-                label: Text(quality.displayName),
+                label: Text(quality.name.toUpperCase()),
                 selected: _selectedWaterQuality == quality,
                 onSelected: (selected) {
                   setState(() {
@@ -277,7 +277,7 @@ class _SearchScreenState extends State<SearchScreen> {
             title: 'Accessibility',
             children: Accessibility.values.map((accessibility) {
               return FilterChip(
-                label: Text(accessibility.displayName),
+                label: Text(accessibility.name.toUpperCase()),
                 selected: _selectedAccessibility == accessibility,
                 onSelected: (selected) {
                   setState(() {
