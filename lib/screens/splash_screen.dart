@@ -58,13 +58,22 @@ class _SplashScreenState extends State<SplashScreen>
     
     if (!mounted) return;
 
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    
-    // Check if user is authenticated
-    if (authProvider.isAuthenticated) {
-      _navigateToHome();
-    } else {
-      _navigateToOnboarding();
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      
+      // Check if user is authenticated
+      if (authProvider.isAuthenticated) {
+        _navigateToHome();
+      } else {
+        _navigateToOnboarding();
+      }
+    } catch (e) {
+      print('Navigation error: $e');
+      // Fallback: navigate to onboarding after timeout
+      await Future.delayed(const Duration(seconds: 1));
+      if (mounted) {
+        _navigateToOnboarding();
+      }
     }
   }
 

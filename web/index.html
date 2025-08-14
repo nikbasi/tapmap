@@ -31,6 +31,42 @@
 
   <title>water_fountain_finder</title>
   <link rel="manifest" href="manifest.json">
+  
+  <!-- Firebase SDK v9+ (modern) -->
+  <script type="module">
+    // Import the functions you need from the SDKs you need
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-analytics.js";
+    import { getAuth } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+    import { getFirestore } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+    import { getStorage } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
+    
+    // Your web app's Firebase configuration
+    const firebaseConfig = {
+      apiKey: "AIzaSyBS3SZYwep1RVsrrDuXO-LApgKgem0dfz0",
+      authDomain: "tapmap-7b2f2.firebaseapp.com",
+      projectId: "tapmap-7b2f2",
+      storageBucket: "tapmap-7b2f2.firebasestorage.app",
+      messagingSenderId: "500324905447",
+      appId: "1:500324905447:web:03f8c22c3ec6d1344a4d42",
+      measurementId: "G-0FVMPQKZBW"
+    };
+
+    // Initialize Firebase
+    const app = initializeApp(firebaseConfig);
+    const analytics = getAnalytics(app);
+    const auth = getAuth(app);
+    const firestore = getFirestore(app);
+    const storage = getStorage(app);
+
+    // Export for use in Flutter
+    window.firebase = { app, analytics, auth, firestore, storage };
+    window.firebaseApp = app;
+    window.firebaseAuth = auth;
+    window.firebaseFirestore = firestore;
+    window.firebaseStorage = storage;
+    window.firebaseAnalytics = analytics;
+  </script>
 </head>
 <body>
   <script src="flutter_bootstrap.js" async></script>
