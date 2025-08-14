@@ -4,11 +4,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:water_fountain_finder/models/user.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 class AuthProvider extends ChangeNotifier {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final GoogleSignIn _googleSignIn = GoogleSignIn();
+  final FirebaseAuth _auth = kIsWeb ? FirebaseAuth.instance : FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = kIsWeb ? FirebaseFirestore.instance : FirebaseFirestore.instance;
+  final GoogleSignIn _googleSignIn = kIsWeb ? GoogleSignIn() : GoogleSignIn();
 
   User? get currentUser => _auth.currentUser;
   UserModel? _userModel;
@@ -21,7 +22,10 @@ class AuthProvider extends ChangeNotifier {
   String? _error;
 
   AuthProvider() {
-    _auth.authStateChanges().listen(_onAuthStateChanged);
+    if (!kIsWeb) {
+      // Only listen to auth state changes on mobile platforms
+      _auth.authStateChanges().listen(_onAuthStateChanged);
+    }
   }
 
   void _onAuthStateChanged(User? user) async {

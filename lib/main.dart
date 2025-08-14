@@ -6,34 +6,21 @@ import 'package:water_fountain_finder/providers/fountain_provider.dart';
 import 'package:water_fountain_finder/providers/location_provider.dart';
 import 'package:water_fountain_finder/screens/splash_screen.dart';
 import 'package:water_fountain_finder/utils/constants.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // Initialize Firebase for all platforms
+
   try {
-    if (kIsWeb) {
-      // Web platform - Firebase is initialized via JavaScript
-      print('Web platform detected - Firebase will be initialized via JavaScript');
-      print('Project ID: tapmap-7b2f2');
-      print('Waiting for Firebase to initialize...');
-      
-      // Wait a bit for JavaScript to initialize Firebase
-      await Future.delayed(const Duration(milliseconds: 500));
-    } else {
-      // Mobile platforms (Android/iOS)
-      await Firebase.initializeApp(
-        options: DefaultFirebaseOptions.currentPlatform,
-      );
-      print('Firebase initialized successfully for mobile platform');
-    }
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
   } catch (e) {
+    // Log and continue; app should still navigate to onboarding
+    // ignore: avoid_print
     print('Firebase initialization error: $e');
-    // Continue without Firebase for now
   }
-  
+
   runApp(const WaterFountainFinderApp());
 }
 
@@ -58,7 +45,6 @@ class WaterFountainFinderApp extends StatelessWidget {
             brightness: Brightness.light,
           ),
           useMaterial3: true,
-          fontFamily: 'Roboto',
           appBarTheme: const AppBarTheme(
             backgroundColor: AppColors.primary,
             foregroundColor: Colors.white,
