@@ -5,6 +5,8 @@ import 'package:water_fountain_finder/providers/auth_provider.dart';
 import 'package:water_fountain_finder/providers/fountain_provider.dart';
 import 'package:water_fountain_finder/providers/location_provider.dart';
 import 'package:water_fountain_finder/screens/splash_screen.dart';
+import 'package:water_fountain_finder/screens/sign_in_screen.dart';
+import 'package:water_fountain_finder/screens/sign_up_screen.dart';
 import 'package:water_fountain_finder/utils/constants.dart';
 import 'firebase_options.dart';
 
@@ -62,6 +64,10 @@ class WaterFountainFinderApp extends StatelessWidget {
           ),
         ),
         home: const SplashScreen(),
+        routes: {
+          '/signin': (context) => const SignInScreen(),
+          '/signup': (context) => const SignUpScreen(),
+        },
         debugShowCheckedModeBanner: false,
       ),
     );

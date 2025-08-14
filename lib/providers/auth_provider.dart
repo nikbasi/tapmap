@@ -325,4 +325,28 @@ class AuthProvider extends ChangeNotifier {
   void clearError() {
     _clearError();
   }
+
+  // Debug method to print current user data
+  void debugPrintUserData() {
+    print('=== USER DATA DEBUG ===');
+    print('Is Authenticated: $isAuthenticated');
+    print('Current User UID: ${currentUser?.uid}');
+    print('User Model: $_userModel');
+    if (_userModel != null) {
+      print('Email: ${_userModel!.email}');
+      print('Display Name: ${_userModel!.displayName}');
+      print('Favorites: ${_userModel!.favoriteFountainIds}');
+      print('Contributions: ${_userModel!.contributedFountainIds}');
+      print('Validations: ${_userModel!.validatedFountainIds}');
+      print('Contribution Score: ${_userModel!.contributionScore}');
+    }
+    print('=======================');
+  }
+
+  // Method to refresh user data from Firestore
+  Future<void> refreshUserData() async {
+    if (currentUser != null) {
+      await _loadUserData(currentUser!.uid);
+    }
+  }
 }

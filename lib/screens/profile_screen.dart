@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import 'package:water_fountain_finder/providers/auth_provider.dart';
 import 'package:water_fountain_finder/providers/fountain_provider.dart';
 import 'package:water_fountain_finder/models/user.dart';
 import 'package:water_fountain_finder/utils/constants.dart';
+import 'package:water_fountain_finder/widgets/database_viewer.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -70,6 +72,11 @@ class ProfileScreen extends StatelessWidget {
           
           const SizedBox(height: AppSizes.paddingL),
           
+          // Debug section (remove in production)
+          if (kDebugMode) _buildDebugSection(context, authProvider),
+          
+          const SizedBox(height: AppSizes.paddingM),
+          
           // Sign out button
           SizedBox(
             width: double.infinity,
@@ -124,7 +131,7 @@ class ProfileScreen extends StatelessWidget {
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: () {
-                      // TODO: Navigate to sign in
+                      Navigator.pushNamed(context, '/signin');
                     },
                     icon: const Icon(Icons.login),
                     label: const Text('Sign In'),
@@ -137,7 +144,7 @@ class ProfileScreen extends StatelessWidget {
                 Expanded(
                   child: ElevatedButton.icon(
                     onPressed: () {
-                      // TODO: Navigate to sign up
+                      Navigator.pushNamed(context, '/signup');
                     },
                     icon: const Icon(Icons.person_add),
                     label: const Text('Sign Up'),
@@ -158,9 +165,9 @@ class ProfileScreen extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppSizes.paddingL),
       decoration: BoxDecoration(
-        color: AppColors.primary.withOpacity(0.1),
+        color: AppColors.primary.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(AppSizes.radiusL),
-        border: Border.all(color: AppColors.primary.withOpacity(0.3)),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
@@ -178,7 +185,7 @@ class ProfileScreen extends StatelessWidget {
                       user.photoURL!,
                       fit: BoxFit.cover,
                       errorBuilder: (context, error, stackTrace) {
-                        return Icon(
+                        return const Icon(
                           Icons.person,
                           size: 40,
                           color: Colors.white,
@@ -186,7 +193,7 @@ class ProfileScreen extends StatelessWidget {
                       },
                     ),
                   )
-                : Icon(
+                : const Icon(
                     Icons.person,
                     size: 40,
                     color: Colors.white,
@@ -294,9 +301,9 @@ class ProfileScreen extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppSizes.paddingM),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(AppSizes.radiusM),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Column(
         children: [
@@ -318,7 +325,7 @@ class ProfileScreen extends StatelessWidget {
             title,
             style: TextStyle(
               fontSize: 12,
-              color: color.withOpacity(0.8),
+              color: color.withValues(alpha: 0.8),
             ),
             textAlign: TextAlign.center,
           ),
@@ -350,7 +357,7 @@ class ProfileScreen extends StatelessWidget {
           LinearProgressIndicator(
             value: _getContributionProgress(user.contributionScore),
             backgroundColor: Colors.grey.shade300,
-            valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+            valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
           ),
           const SizedBox(height: AppSizes.paddingS),
           Text(
@@ -430,7 +437,7 @@ class ProfileScreen extends StatelessWidget {
       leading: Container(
         padding: const EdgeInsets.all(AppSizes.paddingS),
         decoration: BoxDecoration(
-          color: AppColors.primary.withOpacity(0.1),
+          color: AppColors.primary.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(AppSizes.radiusS),
         ),
         child: Icon(
@@ -459,6 +466,155 @@ class ProfileScreen extends StatelessWidget {
         color: Colors.grey,
       ),
       onTap: onTap,
+    );
+  }
+
+  Widget _buildDebugSection(BuildContext context, AuthProvider authProvider) {
+    return Container(
+      padding: const EdgeInsets.all(AppSizes.paddingM),
+      decoration: BoxDecoration(
+        color: Colors.orange.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(AppSizes.radiusM),
+        border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.bug_report,
+                color: Colors.orange.shade700,
+                size: 20,
+              ),
+              const SizedBox(width: AppSizes.paddingS),
+              Text(
+                'Debug Tools (Development Only)',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.orange.shade700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSizes.paddingM),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    authProvider.debugPrintUserData();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Check console for user data debug info'),
+                        backgroundColor: AppColors.info,
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.print, size: 16),
+                  label: const Text('Print User Data'),
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(color: Colors.orange.shade400),
+                    foregroundColor: Colors.orange.shade700,
+                    padding: const EdgeInsets.symmetric(vertical: AppSizes.paddingS),
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSizes.paddingS),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () async {
+                    await authProvider.refreshUserData();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('User data refreshed from database'),
+                        backgroundColor: AppColors.success,
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.refresh, size: 16),
+                  label: const Text('Refresh Data'),
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(color: Colors.orange.shade400),
+                    foregroundColor: Colors.orange.shade700,
+                    padding: const EdgeInsets.symmetric(vertical: AppSizes.paddingS),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSizes.paddingS),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    final fountainProvider = Provider.of<FountainProvider>(context, listen: false);
+                    fountainProvider.debugPrintState();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Check console for fountain provider debug info'),
+                        backgroundColor: AppColors.info,
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.map, size: 16),
+                  label: const Text('Print Fountain Data'),
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(color: Colors.orange.shade400),
+                    foregroundColor: Colors.orange.shade700,
+                    padding: const EdgeInsets.symmetric(vertical: AppSizes.paddingS),
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSizes.paddingS),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () async {
+                    final fountainProvider = Provider.of<FountainProvider>(context, listen: false);
+                    await fountainProvider.refreshData();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Fountain data refreshed from database'),
+                        backgroundColor: AppColors.success,
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.refresh, size: 16),
+                  label: const Text('Refresh Fountains'),
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(color: Colors.orange.shade400),
+                    foregroundColor: Colors.orange.shade700,
+                    padding: const EdgeInsets.symmetric(vertical: AppSizes.paddingS),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSizes.paddingS),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const DatabaseViewer(),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.storage, size: 16),
+              label: const Text('View Database'),
+              style: OutlinedButton.styleFrom(
+                side: BorderSide(color: Colors.orange.shade400),
+                foregroundColor: Colors.orange.shade700,
+                padding: const EdgeInsets.symmetric(vertical: AppSizes.paddingS),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

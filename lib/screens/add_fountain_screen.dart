@@ -150,7 +150,7 @@ class _AddFountainScreenState extends State<AddFountainScreen> {
       );
 
       final fountainProvider = Provider.of<FountainProvider>(context, listen: false);
-      final success = await fountainProvider.addFountain(fountain);
+      final success = await fountainProvider.addFountain(fountain, authProvider);
 
       if (success && mounted) {
         _showSuccessDialog();

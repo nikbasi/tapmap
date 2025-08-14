@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:water_fountain_finder/models/fountain.dart';
 import 'package:water_fountain_finder/models/user.dart';
+import 'package:water_fountain_finder/providers/auth_provider.dart';
 
 class FountainProvider extends ChangeNotifier {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -112,16 +113,29 @@ class FountainProvider extends ChangeNotifier {
   }
 
   // Add a new fountain
-  Future<bool> addFountain(Fountain fountain) async {
+  Future<bool> addFountain(Fountain fountain, AuthProvider authProvider) async {
     try {
       _setLoading(true);
       _clearError();
+
+      final currentUser = authProvider.currentUser;
+      if (currentUser == null) {
+        _setError('User not authenticated');
+        _setLoading(false);
+        return false;
+      }
 
       final docRef = await _firestore.collection('fountains').add(fountain.toFirestore());
       
       // Update the fountain with the generated ID
       final newFountain = fountain.copyWith(id: docRef.id);
       _fountains.insert(0, newFountain);
+      
+      // Update user contribution
+      await _updateUserContribution(currentUser.uid, docRef.id);
+      
+      // Refresh user data in AuthProvider
+      await authProvider.refreshUserData();
       
       _applyFiltersAndSearch();
       _setLoading(false);
@@ -177,21 +191,32 @@ class FountainProvider extends ChangeNotifier {
   }
 
   // Validate a fountain
-  Future<bool> validateFountain(String fountainId, bool isValid, String? comment) async {
+  Future<bool> validateFountain(String fountainId, bool isValid, String? comment, AuthProvider authProvider) async {
     try {
       _setLoading(true);
       _clearError();
 
+      final currentUser = authProvider.currentUser;
+      if (currentUser == null) {
+        _setError('User not authenticated');
+        _setLoading(false);
+        return false;
+      }
+
       final validation = Validation(
-        userId: 'current_user_id', // This should come from AuthProvider
+        userId: currentUser.uid,
         timestamp: DateTime.now(),
         isValid: isValid,
         comment: comment,
       );
 
+      // Update fountain with validation
       await _firestore.collection('fountains').doc(fountainId).update({
         'validations': FieldValue.arrayUnion([validation.toMap()]),
       });
+
+      // Update user document with validation
+      await _updateUserValidation(currentUser.uid, fountainId);
 
       // Update local data
       final index = _fountains.indexWhere((f) => f.id == fountainId);
@@ -208,6 +233,81 @@ class FountainProvider extends ChangeNotifier {
       _setError('Failed to validate fountain: $e');
       _setLoading(false);
       return false;
+    }
+  }
+
+  // Toggle favorite for a fountain
+  Future<bool> toggleFavorite(String fountainId, AuthProvider authProvider) async {
+    try {
+      _setLoading(true);
+      _clearError();
+
+      final currentUser = authProvider.currentUser;
+      if (currentUser == null) {
+        _setError('User not authenticated');
+        _setLoading(false);
+        return false;
+      }
+
+      final userDoc = await _firestore.collection('users').doc(currentUser.uid).get();
+      if (!userDoc.exists) {
+        _setError('User document not found');
+        _setLoading(false);
+        return false;
+      }
+
+      final userData = userDoc.data() as Map<String, dynamic>;
+      final favoriteFountainIds = List<String>.from(userData['favoriteFountainIds'] ?? []);
+      
+      bool isFavorite = favoriteFountainIds.contains(fountainId);
+      
+      if (isFavorite) {
+        // Remove from favorites
+        favoriteFountainIds.remove(fountainId);
+        await _firestore.collection('users').doc(currentUser.uid).update({
+          'favoriteFountainIds': favoriteFountainIds,
+        });
+      } else {
+        // Add to favorites
+        favoriteFountainIds.add(fountainId);
+        await _firestore.collection('users').doc(currentUser.uid).update({
+          'favoriteFountainIds': favoriteFountainIds,
+        });
+      }
+
+      // Refresh user data in AuthProvider
+      await authProvider.refreshUserData();
+
+      _setLoading(false);
+      return true;
+    } catch (e) {
+      _setError('Failed to toggle favorite: $e');
+      _setLoading(false);
+      return false;
+    }
+  }
+
+  // Update user contribution when adding a fountain
+  Future<void> _updateUserContribution(String userId, String fountainId) async {
+    try {
+      await _firestore.collection('users').doc(userId).update({
+        'contributedFountainIds': FieldValue.arrayUnion([fountainId]),
+        'contributionScore': FieldValue.increment(10),
+      });
+    } catch (e) {
+      print('Failed to update user contribution: $e');
+    }
+  }
+
+  // Update user validation
+  Future<void> _updateUserValidation(String userId, String fountainId) async {
+    try {
+      await _firestore.collection('users').doc(userId).update({
+        'validatedFountainIds': FieldValue.arrayUnion([fountainId]),
+        'contributionScore': FieldValue.increment(5),
+      });
+    } catch (e) {
+      print('Failed to update user validation: $e');
     }
   }
 
@@ -295,6 +395,56 @@ class FountainProvider extends ChangeNotifier {
   // Get favorite fountains for user
   List<Fountain> getFavoriteFountains(UserModel user) {
     return _fountains.where((f) => user.hasFavorited(f.id)).toList();
+  }
+
+  // Check if a fountain is favorited by current user
+  bool isFavoritedByCurrentUser(String fountainId, AuthProvider authProvider) {
+    final user = authProvider.userModel;
+    return user?.hasFavorited(fountainId) ?? false;
+  }
+
+  // Get user's contributed fountains
+  List<Fountain> getUserContributions(UserModel user) {
+    return _fountains.where((f) => user.hasContributed(f.id)).toList();
+  }
+
+  // Get user's validated fountains
+  List<Fountain> getUserValidations(UserModel user) {
+    return _fountains.where((f) => user.hasValidated(f.id)).toList();
+  }
+
+  // Get user statistics
+  Map<String, dynamic> getUserStats(UserModel user) {
+    final contributions = getUserContributions(user);
+    final validations = getUserValidations(user);
+    final favorites = getFavoriteFountains(user);
+
+    return {
+      'totalContributions': contributions.length,
+      'totalValidations': validations.length,
+      'totalFavorites': favorites.length,
+      'contributionScore': user.contributionScore,
+      'contributionLevel': user.contributionLevel,
+    };
+  }
+
+  // Refresh all data from database
+  Future<void> refreshData() async {
+    await _loadFountains();
+    notifyListeners();
+  }
+
+  // Debug method to print current state
+  void debugPrintState() {
+    print('=== FOUNTAIN PROVIDER DEBUG ===');
+    print('Total Fountains: ${_fountains.length}');
+    print('Filtered Fountains: ${_filteredFountains.length}');
+    print('Selected Fountain: ${_selectedFountain?.id ?? 'None'}');
+    print('Is Loading: $_isLoading');
+    print('Error: $_error');
+    print('Search Query: $_searchQuery');
+    print('Filters: $_filters');
+    print('===============================');
   }
 
   // Calculate distance between two points using Haversine formula
