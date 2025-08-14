@@ -79,6 +79,14 @@ class AppConfig {
   static const String osmTileUrl = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
   static const String osmAttribution = '© OpenStreetMap contributors';
   
+  // Satellite Imagery Configuration
+  static const String esriSatelliteUrl = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+  static const String esriSatelliteAttribution = '© Esri — Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community';
+  
+  // Hybrid Map (satellite + labels)
+  static const String esriHybridUrl = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+  static const String esriHybridAttribution = '© Esri — Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community';
+  
   // Firebase Configuration
   static const String firebaseProjectId = 'YOUR_FIREBASE_PROJECT_ID';
   
