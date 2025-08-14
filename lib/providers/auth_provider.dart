@@ -9,7 +9,8 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 class AuthProvider extends ChangeNotifier {
   final FirebaseAuth _auth = kIsWeb ? FirebaseAuth.instance : FirebaseAuth.instance;
   final FirebaseFirestore _firestore = kIsWeb ? FirebaseFirestore.instance : FirebaseFirestore.instance;
-  final GoogleSignIn _googleSignIn = kIsWeb ? GoogleSignIn() : GoogleSignIn();
+  late final GoogleSignIn _googleSignIn;
+  bool _googleSignInAvailable = false;
 
   User? get currentUser => _auth.currentUser;
   UserModel? _userModel;
@@ -17,24 +18,55 @@ class AuthProvider extends ChangeNotifier {
   bool get isAuthenticated => currentUser != null;
   bool get isLoading => _isLoading;
   String? get error => _error;
+  bool get googleSignInAvailable => _googleSignInAvailable;
 
   bool _isLoading = false;
   String? _error;
 
   AuthProvider() {
-    if (!kIsWeb) {
-      // Only listen to auth state changes on mobile platforms
-      _auth.authStateChanges().listen(_onAuthStateChanged);
+    _initializeGoogleSignIn();
+    // Listen to auth state changes on all platforms
+    _auth.authStateChanges().listen(_onAuthStateChanged);
+    // Initialize current state so UI reflects existing session on startup
+    _onAuthStateChanged(_auth.currentUser);
+  }
+
+  void _initializeGoogleSignIn() {
+    try {
+      _googleSignIn = GoogleSignIn();
+      _googleSignInAvailable = true;
+    } catch (e) {
+      _googleSignInAvailable = false;
+      print('Google Sign-In not available: $e');
     }
   }
 
   void _onAuthStateChanged(User? user) async {
-    if (user != null) {
-      await _loadUserData(user.uid);
-    } else {
-      _userModel = null;
+    _setLoading(true);
+    try {
+      if (user != null) {
+        // Ensure we have a minimal user model immediately for UI
+        _userModel ??= UserModel(
+          id: user.uid,
+          email: user.email ?? '',
+          displayName: user.displayName,
+          photoURL: user.photoURL,
+          createdAt: DateTime.now(),
+          lastLoginAt: DateTime.now(),
+          favoriteFountainIds: const [],
+          contributedFountainIds: const [],
+          validatedFountainIds: const [],
+        );
+        notifyListeners();
+
+        await _loadUserData(user.uid);
+      } else {
+        _userModel = null;
+      }
+      notifyListeners();
+    } finally {
+      _setLoading(false);
     }
-    notifyListeners();
   }
 
   Future<void> _loadUserData(String uid) async {
@@ -78,6 +110,11 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<bool> signInWithGoogle() async {
+    if (!_googleSignInAvailable) {
+      _setError('Google Sign-In is not available. Please configure it in Firebase Console first.');
+      return false;
+    }
+
     try {
       _setLoading(true);
       _clearError();
@@ -94,7 +131,26 @@ class AuthProvider extends ChangeNotifier {
         idToken: googleAuth.idToken,
       );
 
-      await _auth.signInWithCredential(credential);
+      final userCred = await _auth.signInWithCredential(credential);
+
+      // Seed minimal model for immediate UI, then load Firestore data
+      final user = userCred.user;
+      if (user != null) {
+        _userModel = UserModel(
+          id: user.uid,
+          email: user.email ?? '',
+          displayName: user.displayName,
+          photoURL: user.photoURL,
+          createdAt: DateTime.now(),
+          lastLoginAt: DateTime.now(),
+          favoriteFountainIds: const [],
+          contributedFountainIds: const [],
+          validatedFountainIds: const [],
+        );
+        notifyListeners();
+        await _loadUserData(user.uid);
+      }
+
       _setLoading(false);
       return true;
     } catch (e) {
