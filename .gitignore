@@ -114,3 +114,23 @@ mapbox_access_token.txt
 # Temporary files
 *.tmp
 *.temp
+
+# Python related
+**/venv/
+**/.venv/
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+.Python
+**/env/
+**/ENV/
+**/env.bak/
+**/ENV.bak/
+
+# Data files (large files that shouldn't be in git)
+**/data/
+**/*.json
+**/*.csv
+**/*.xml
+**/*.geojson

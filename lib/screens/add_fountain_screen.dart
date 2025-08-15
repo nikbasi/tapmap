@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:water_fountain_finder/providers/auth_provider.dart';
 import 'package:water_fountain_finder/providers/fountain_provider.dart';
 import 'package:water_fountain_finder/providers/location_provider.dart';
@@ -28,8 +30,11 @@ class _AddFountainScreenState extends State<AddFountainScreen> {
   
   bool _isLoading = false;
   bool _useCurrentLocation = true;
-  double? _customLatitude;
-  double? _customLongitude;
+  
+  // Map-related variables
+  final MapController _mapController = MapController();
+  LatLng? _selectedLocation;
+  List<Marker> _mapMarkers = [];
 
   final List<String> _availableTags = [
     '24h',
@@ -43,6 +48,131 @@ class _AddFountainScreenState extends State<AddFountainScreen> {
     'parking_nearby',
     'restroom_nearby',
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeLocation();
+  }
+
+  Future<void> _initializeLocation() async {
+    final locationProvider = Provider.of<LocationProvider>(context, listen: false);
+    final position = locationProvider.currentPosition;
+    
+    if (position != null) {
+      setState(() {
+        _selectedLocation = LatLng(position.latitude, position.longitude);
+        _updateMapMarkers();
+      });
+    }
+  }
+
+  void _updateMapMarkers() {
+    if (_selectedLocation != null) {
+      _mapMarkers = [
+        Marker(
+          point: _selectedLocation!,
+          width: 40,
+          height: 40,
+                      child: Container(
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.8),
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: Colors.white,
+                  width: 3,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+            child: const Icon(
+              Icons.location_on,
+              color: Colors.white,
+              size: 24,
+            ),
+          ),
+        ),
+      ];
+    }
+  }
+
+  void _onMapTap(TapPosition tapPosition, LatLng coordinates) {
+    setState(() {
+      _selectedLocation = coordinates;
+      _useCurrentLocation = false;
+      _updateMapMarkers();
+    });
+    
+    // Show feedback to user
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Location set to: ${coordinates.latitude.toStringAsFixed(6)}, ${coordinates.longitude.toStringAsFixed(6)}',
+        ),
+        duration: const Duration(seconds: 2),
+        backgroundColor: AppColors.success,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  // Removed unused method
+
+  Future<void> _setToCurrentLocation() async {
+    final locationProvider = Provider.of<LocationProvider>(context, listen: false);
+    final position = await locationProvider.getCurrentLocation();
+    
+    if (position != null) {
+      setState(() {
+        _selectedLocation = LatLng(position.latitude, position.longitude);
+        _useCurrentLocation = true;
+        _updateMapMarkers();
+      });
+      
+      // Center the map on the new location
+      _mapController.move(
+        _selectedLocation!,
+        15.0,
+      );
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Unable to get current location. Please check location permissions.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    }
+  }
+
+  void _centerMapOnSelectedLocation() {
+    if (_selectedLocation != null) {
+      _mapController.move(
+        _selectedLocation!,
+        15.0,
+      );
+    }
+  }
+
+  void _clearSelectedLocation() {
+    setState(() {
+      _selectedLocation = null;
+      _mapMarkers.clear();
+    });
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Location cleared. Please select a new location on the map.'),
+        backgroundColor: Colors.orange,
+      ),
+    );
+  }
 
   @override
   void dispose() {
@@ -104,6 +234,17 @@ class _AddFountainScreenState extends State<AddFountainScreen> {
   Future<void> _submitFountain() async {
     if (!_formKey.currentState!.validate()) return;
 
+    // Validate that a location is selected
+    if (_selectedLocation == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a location on the map before submitting.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     if (!authProvider.isAuthenticated) {
       _showAuthenticationDialog();
@@ -115,23 +256,8 @@ class _AddFountainScreenState extends State<AddFountainScreen> {
     });
 
     try {
-      final locationProvider = Provider.of<LocationProvider>(context, listen: false);
-      double latitude, longitude;
-
-      if (_useCurrentLocation) {
-        final position = await locationProvider.getCurrentLocation();
-        if (position == null) {
-          throw Exception('Unable to get current location');
-        }
-        latitude = position.latitude;
-        longitude = position.longitude;
-      } else {
-        if (_customLatitude == null || _customLongitude == null) {
-          throw Exception('Please enter custom coordinates');
-        }
-        latitude = _customLatitude!;
-        longitude = _customLongitude!;
-      }
+      double latitude = _selectedLocation!.latitude;
+      double longitude = _selectedLocation!.longitude;
 
       final fountain = Fountain(
         id: '', // Will be generated by Firestore
@@ -183,9 +309,12 @@ class _AddFountainScreenState extends State<AddFountainScreen> {
       _selectedTags.clear();
       _photoUrls.clear();
       _useCurrentLocation = true;
-      _customLatitude = null;
-      _customLongitude = null;
+      _selectedLocation = null;
+      _mapMarkers.clear();
     });
+    
+    // Reinitialize location
+    _initializeLocation();
   }
 
   void _showAuthenticationDialog() {
@@ -449,6 +578,9 @@ class _AddFountainScreenState extends State<AddFountainScreen> {
               onChanged: (value) {
                 setState(() {
                   _useCurrentLocation = value!;
+                  if (value) {
+                    _initializeLocation();
+                  }
                 });
               },
             ),
@@ -463,59 +595,285 @@ class _AddFountainScreenState extends State<AddFountainScreen> {
                 });
               },
             ),
-            const Text('Enter coordinates'),
+            const Text('Select on map'),
           ],
         ),
 
-        if (!_useCurrentLocation) ...[
-          const SizedBox(height: AppSizes.paddingM),
-          Row(
+        const SizedBox(height: AppSizes.paddingM),
+        
+        // Interactive map for location selection
+        Container(
+          height: 300,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(AppSizes.radiusM),
+            border: Border.all(color: Colors.grey.shade300),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(AppSizes.radiusM),
+            child: _buildLocationMap(),
+          ),
+        ),
+
+        const SizedBox(height: AppSizes.paddingM),
+
+        // Location instructions and controls
+        Container(
+          padding: const EdgeInsets.all(AppSizes.paddingM),
+          decoration: BoxDecoration(
+            color: Colors.blue.shade50,
+            borderRadius: BorderRadius.circular(AppSizes.radiusM),
+            border: Border.all(color: Colors.blue.shade200),
+          ),
+          child: Column(
             children: [
-              Expanded(
-                child: _buildTextField(
-                  controller: TextEditingController(
-                    text: _customLatitude?.toString() ?? '',
+              Row(
+                children: [
+                  Icon(
+                    Icons.info_outline,
+                    color: Colors.blue.shade700,
+                    size: 20,
                   ),
-                  label: 'Latitude',
-                  hint: 'e.g., 40.7128',
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter latitude';
-                    }
-                    final lat = double.tryParse(value);
-                    if (lat == null || lat < -90 || lat > 90) {
-                      return 'Invalid latitude';
-                    }
-                    _customLatitude = lat;
-                    return null;
-                  },
+                  const SizedBox(width: AppSizes.paddingS),
+                  Expanded(
+                    child: Text(
+                      'Tap anywhere on the map to set the fountain location.',
+                      style: TextStyle(
+                        color: Colors.blue.shade700,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+                      const SizedBox(height: AppSizes.paddingM),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _setToCurrentLocation,
+                icon: const Icon(Icons.my_location, size: 18),
+                label: const Text('Set to Current Location'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.primary,
+                  side: const BorderSide(color: AppColors.primary),
                 ),
               ),
-              const SizedBox(width: AppSizes.paddingM),
-              Expanded(
-                child: _buildTextField(
-                  controller: TextEditingController(
-                    text: _customLongitude?.toString() ?? '',
+            ),
+            const SizedBox(width: AppSizes.paddingM),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _centerMapOnSelectedLocation,
+                icon: const Icon(Icons.center_focus_strong, size: 18),
+                label: const Text('Center Map'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.accent,
+                  side: const BorderSide(color: AppColors.accent),
+                ),
+              ),
+            ),
+          ],
+        ),
+              const SizedBox(height: AppSizes.paddingM),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _selectedLocation != null ? _clearSelectedLocation : null,
+                  icon: const Icon(Icons.clear, size: 18),
+                  label: const Text('Clear Selected Location'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.red,
+                    side: const BorderSide(color: Colors.red),
                   ),
-                  label: 'Longitude',
-                  hint: 'e.g., -74.0060',
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter longitude';
-                    }
-                    final lon = double.tryParse(value);
-                    if (lon == null || lon < -180 || lon > 180) {
-                      return 'Invalid longitude';
-                    }
-                    _customLongitude = lon;
-                    return null;
-                  },
                 ),
               ),
             ],
           ),
+        ),
+
+        if (_selectedLocation != null) ...[
+          const SizedBox(height: AppSizes.paddingM),
+          Container(
+            padding: const EdgeInsets.all(AppSizes.paddingM),
+            decoration: BoxDecoration(
+              color: AppColors.success.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(AppSizes.radiusM),
+              border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.check_circle,
+                  color: AppColors.success,
+                  size: 20,
+                ),
+                const SizedBox(width: AppSizes.paddingS),
+                Text(
+                  'Location selected',
+                  style: TextStyle(
+                    color: AppColors.success,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSizes.paddingM),
+          Row(
+            children: [
+              Expanded(
+                child: _buildCoordinateDisplay(
+                  'Latitude',
+                  _selectedLocation!.latitude.toStringAsFixed(6),
+                  Icons.north,
+                ),
+              ),
+              const SizedBox(width: AppSizes.paddingM),
+              Expanded(
+                child: _buildCoordinateDisplay(
+                  'Longitude',
+                  _selectedLocation!.longitude.toStringAsFixed(6),
+                  Icons.east,
+                ),
+              ),
+            ],
+          ),
+        ] else ...[
+          const SizedBox(height: AppSizes.paddingM),
+          Container(
+            padding: const EdgeInsets.all(AppSizes.paddingM),
+            decoration: BoxDecoration(
+              color: Colors.orange.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(AppSizes.radiusM),
+              border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.warning_amber,
+                  color: Colors.orange,
+                  size: 20,
+                ),
+                const SizedBox(width: AppSizes.paddingS),
+                Text(
+                  'Please select a location on the map',
+                  style: TextStyle(
+                    color: Colors.orange,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ],
+    );
+  }
+
+  Widget _buildLocationMap() {
+    final initialCenter = _selectedLocation ?? 
+        const LatLng(40.7128, -74.0060); // Default to NYC if no location set
+    
+    return Stack(
+      children: [
+        FlutterMap(
+          mapController: _mapController,
+          options: MapOptions(
+            initialCenter: initialCenter,
+            initialZoom: 15.0,
+            onTap: _onMapTap,
+            minZoom: 10.0,
+            maxZoom: 18.0,
+          ),
+          children: [
+            TileLayer(
+              urlTemplate: AppConfig.osmTileUrl,
+              userAgentPackageName: 'com.example.water_fountain_finder',
+            ),
+            MarkerLayer(markers: _mapMarkers),
+            RichAttributionWidget(
+              attributions: [
+                TextSourceAttribution(
+                  AppConfig.osmAttribution,
+                  onTap: () {},
+                ),
+              ],
+            ),
+          ],
+        ),
+        
+        // Zoom controls
+        Positioned(
+          right: AppSizes.paddingM,
+          bottom: AppSizes.paddingM,
+          child: Column(
+            children: [
+                              FloatingActionButton.small(
+                  onPressed: () {
+                    final currentZoom = _mapController.camera.zoom;
+                    _mapController.move(
+                      _mapController.camera.center,
+                      (currentZoom + 1).clamp(10.0, 18.0),
+                    );
+                  },
+                  heroTag: 'zoom_in',
+                  child: const Icon(Icons.add),
+                ),
+              const SizedBox(height: AppSizes.paddingS),
+                              FloatingActionButton.small(
+                  onPressed: () {
+                    final currentZoom = _mapController.camera.zoom;
+                    _mapController.move(
+                      _mapController.camera.center,
+                      (currentZoom - 1).clamp(10.0, 18.0),
+                    );
+                  },
+                  heroTag: 'zoom_out',
+                  child: const Icon(Icons.remove),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCoordinateDisplay(String label, String value, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.all(AppSizes.paddingM),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(AppSizes.radiusM),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 16, color: Colors.grey.shade600),
+              const SizedBox(width: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey.shade600,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              fontFamily: 'monospace',
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
     );
   }
 
@@ -529,7 +887,7 @@ class _AddFountainScreenState extends State<AddFountainScreen> {
           label: Text(tag.replaceAll('_', ' ')),
           selected: isSelected,
           onSelected: (selected) => _toggleTag(tag),
-          selectedColor: AppColors.primary.withOpacity(0.2),
+          selectedColor: AppColors.primary.withValues(alpha: 0.2),
           checkmarkColor: AppColors.primary,
         );
       }).toList(),
