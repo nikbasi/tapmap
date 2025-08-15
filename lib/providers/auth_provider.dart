@@ -7,8 +7,8 @@ import 'package:water_fountain_finder/models/user.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
 class AuthProvider extends ChangeNotifier {
-  final FirebaseAuth _auth = kIsWeb ? FirebaseAuth.instance : FirebaseAuth.instance;
-  final FirebaseFirestore _firestore = kIsWeb ? FirebaseFirestore.instance : FirebaseFirestore.instance;
+  late final FirebaseAuth _auth;
+  late final FirebaseFirestore _firestore;
   late final GoogleSignIn _googleSignIn;
   bool _googleSignInAvailable = false;
 
@@ -23,12 +23,62 @@ class AuthProvider extends ChangeNotifier {
   bool _isLoading = false;
   String? _error;
 
+  // Simple check for Firebase availability
+  bool get isFirebaseAvailable {
+    try {
+      // Try to access a simple Firebase property to check availability
+      _auth.app.name;
+      _firestore.app.name;
+      return true;
+    } catch (e) {
+      print('Firebase not available: $e');
+      return false;
+    }
+  }
+
+  // Refresh Firebase instances if they become available
+  Future<void> refreshFirebaseInstances() async {
+    try {
+      print('Refreshing Firebase instances...');
+      
+      // Try to set up auth state listener again
+      try {
+        _auth.authStateChanges().listen(_onAuthStateChanged);
+        // Initialize current state
+        _onAuthStateChanged(_auth.currentUser);
+        print('Firebase instances refreshed successfully');
+      } catch (e) {
+        print('Error setting up auth state listener after refresh: $e');
+      }
+    } catch (e) {
+      print('Error refreshing Firebase instances: $e');
+    }
+  }
+
   AuthProvider() {
+    try {
+      // Create Firebase instances
+      _auth = FirebaseAuth.instance;
+      _firestore = FirebaseFirestore.instance;
+      print('Firebase instances created successfully');
+    } catch (e) {
+      print('Error creating Firebase instances: $e');
+      // Create fallback instances even if there's an error
+      _auth = FirebaseAuth.instance;
+      _firestore = FirebaseFirestore.instance;
+    }
+    
     _initializeGoogleSignIn();
-    // Listen to auth state changes on all platforms
-    _auth.authStateChanges().listen(_onAuthStateChanged);
-    // Initialize current state so UI reflects existing session on startup
-    _onAuthStateChanged(_auth.currentUser);
+    
+    // Only listen to auth state changes if Firebase is properly initialized
+    try {
+      _auth.authStateChanges().listen(_onAuthStateChanged);
+      // Initialize current state so UI reflects existing session on startup
+      _onAuthStateChanged(_auth.currentUser);
+    } catch (e) {
+      print('Error setting up auth state listener: $e');
+      // Continue without auth state listening
+    }
   }
 
   void _initializeGoogleSignIn() {
@@ -71,14 +121,27 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> _loadUserData(String uid) async {
     try {
+      print('Loading user data from Firestore for UID: $uid');
+      
+      // Check if Firestore is available
+      if (!isFirebaseAvailable) {
+        print('Firebase not available, skipping user data load');
+        return;
+      }
+      
       final doc = await _firestore.collection('users').doc(uid).get();
       if (doc.exists) {
+        print('User document exists, parsing data...');
         _userModel = UserModel.fromFirestore(doc);
+        print('User data parsed successfully');
       } else {
+        print('User document does not exist, creating new one...');
         // Create new user document if it doesn't exist
         await _createUserDocument(uid);
+        print('New user document created');
       }
     } catch (e) {
+      print('Error loading user data: $e');
       _error = 'Failed to load user data: $e';
       notifyListeners();
     }
@@ -88,6 +151,12 @@ class AuthProvider extends ChangeNotifier {
     try {
       final user = _auth.currentUser;
       if (user != null) {
+        // Check if Firestore is available
+        if (!isFirebaseAvailable) {
+          print('Firebase not available, skipping user document creation');
+          return;
+        }
+        
         final userData = UserModel(
           id: uid,
           email: user.email ?? '',
@@ -104,6 +173,7 @@ class AuthProvider extends ChangeNotifier {
         _userModel = userData;
       }
     } catch (e) {
+      print('Error creating user document: $e');
       _error = 'Failed to create user document: $e';
       notifyListeners();
     }
@@ -118,6 +188,13 @@ class AuthProvider extends ChangeNotifier {
     try {
       _setLoading(true);
       _clearError();
+
+      // Check if Firebase Auth is available
+      if (!isFirebaseAvailable) {
+        _setError('Firebase not properly configured');
+        _setLoading(false);
+        return false;
+      }
 
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
       if (googleUser == null) {
@@ -345,8 +422,13 @@ class AuthProvider extends ChangeNotifier {
 
   // Method to refresh user data from Firestore
   Future<void> refreshUserData() async {
+    print('refreshUserData called');
     if (currentUser != null) {
+      print('Loading user data for: ${currentUser!.uid}');
       await _loadUserData(currentUser!.uid);
+      print('User data loaded successfully');
+    } else {
+      print('No current user found');
     }
   }
 }

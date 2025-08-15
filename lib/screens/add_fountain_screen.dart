@@ -156,7 +156,8 @@ class _AddFountainScreenState extends State<AddFountainScreen> {
         _showSuccessDialog();
         _resetForm();
       } else {
-        throw Exception('Failed to add fountain');
+        final error = fountainProvider.error ?? 'Failed to add fountain';
+        throw Exception(error);
       }
     } catch (e) {
       if (mounted) {

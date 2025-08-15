@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart' show FirebaseException;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:water_fountain_finder/models/fountain.dart';
 import 'package:water_fountain_finder/models/user.dart';
@@ -24,8 +25,35 @@ class FountainProvider extends ChangeNotifier {
   String? get error => _error;
   String get searchQuery => _searchQuery;
 
+  // Simple check for Firebase availability
+  bool get isFirebaseAvailable {
+    try {
+      // Try to access a simple Firebase property to check availability
+      _firestore.app.name;
+      return true;
+    } catch (e) {
+      print('Firebase not available in FountainProvider: $e');
+      return false;
+    }
+  }
+
+  // Manually trigger fountain loading (useful for retrying after Firebase initialization)
+  Future<void> retryLoadFountains() async {
+    if (isFirebaseAvailable) {
+      print('Retrying fountain loading...');
+      await _loadFountains();
+    } else {
+      print('Firebase not available, cannot load fountains');
+    }
+  }
+
   FountainProvider() {
-    _loadFountains();
+    // Only load fountains if Firebase is available
+    if (isFirebaseAvailable) {
+      _loadFountains();
+    } else {
+      print('Firebase not available in FountainProvider, skipping fountain load');
+    }
   }
 
   // Load all fountains
@@ -115,8 +143,16 @@ class FountainProvider extends ChangeNotifier {
   // Add a new fountain
   Future<bool> addFountain(Fountain fountain, AuthProvider authProvider) async {
     try {
+      print('Starting addFountain...');
       _setLoading(true);
       _clearError();
+
+      // Check if Firebase is available
+      if (!isFirebaseAvailable) {
+        _setError('Firebase not properly configured');
+        _setLoading(false);
+        return false;
+      }
 
       final currentUser = authProvider.currentUser;
       if (currentUser == null) {
@@ -124,23 +160,101 @@ class FountainProvider extends ChangeNotifier {
         _setLoading(false);
         return false;
       }
+      print('User authenticated: ${currentUser.uid}');
 
-      final docRef = await _firestore.collection('fountains').add(fountain.toFirestore());
+      // Prepare and log payload
+      print('Preparing payload...');
+      final payload = fountain.toFirestore();
+      print('Payload: ' + payload.toString());
+
+      // Test if Firestore database exists and is accessible
+      print('Testing Firestore database existence...');
+      try {
+        // Try to access a system collection to check if database exists
+        final dbInfo = await _firestore.app.options;
+        print('Firestore database exists and is accessible');
+        print('Project ID: ${dbInfo.projectId}');
+        print('Database URL: ${dbInfo.databaseURL}');
+      } catch (e) {
+        print('Firestore database test failed: $e');
+        _setError('Firestore database not accessible: $e');
+        _setLoading(false);
+        return false;
+      }
+
+      // Simple connectivity test
+      print('Testing Firestore connectivity...');
+      try {
+        final testSnapshot = await _firestore.collection('fountains').limit(1).get();
+        print('Firestore connectivity test passed - found ${testSnapshot.docs.length} documents');
+      } catch (e) {
+        print('Firestore connectivity test failed: $e');
+        _setError('Firestore connectivity test failed: $e');
+        _setLoading(false);
+        return false;
+      }
+
+      print('Adding fountain to Firestore...');
+      DocumentReference<Map<String, dynamic>> docRef;
+      try {
+        print('Starting Firestore add operation...');
+        final startTime = DateTime.now();
+        
+        // Add timeout to prevent hanging
+        docRef = await _firestore.collection('fountains').add(payload).timeout(
+          const Duration(seconds: 10),
+          onTimeout: () {
+            final elapsed = DateTime.now().difference(startTime);
+            print('Firestore operation timed out after ${elapsed.inMilliseconds}ms');
+            throw Exception('Firestore operation timed out after 10 seconds');
+          },
+        );
+        
+        final elapsed = DateTime.now().difference(startTime);
+        print('Fountain added to Firestore with ID: ${docRef.id} in ${elapsed.inMilliseconds}ms');
+      } on FirebaseException catch (fe) {
+        print('FirebaseException adding fountain: ' + fe.code + ' - ' + (fe.message ?? '')); 
+        _setError('Firebase error: ${fe.code} - ${fe.message}');
+        _setLoading(false);
+        return false;
+      } catch (e, st) {
+        print('Unknown error adding fountain: ' + e.toString());
+        print(st);
+        _setError('Failed to add fountain: $e');
+        _setLoading(false);
+        return false;
+      }
       
       // Update the fountain with the generated ID
       final newFountain = fountain.copyWith(id: docRef.id);
       _fountains.insert(0, newFountain);
       
-      // Update user contribution
-      await _updateUserContribution(currentUser.uid, docRef.id);
+      print('Updating user contribution...');
+      try {
+        // Update user contribution
+        await _updateUserContribution(currentUser.uid, docRef.id);
+        print('User contribution updated');
+      } catch (e) {
+        print('Warning: Failed to update user contribution: $e');
+        // Don't fail the entire operation for this
+      }
       
-      // Refresh user data in AuthProvider
-      await authProvider.refreshUserData();
+      print('Refreshing user data...');
+      try {
+        // Refresh user data in AuthProvider
+        await authProvider.refreshUserData();
+        print('User data refreshed');
+      } catch (e) {
+        print('Warning: Failed to refresh user data: $e');
+        // Don't fail the entire operation for this
+      }
       
       _applyFiltersAndSearch();
       _setLoading(false);
+      print('addFountain completed successfully');
       return true;
     } catch (e) {
+      print('Error in addFountain: $e');
       _setError('Failed to add fountain: $e');
       _setLoading(false);
       return false;
@@ -290,10 +404,12 @@ class FountainProvider extends ChangeNotifier {
   // Update user contribution when adding a fountain
   Future<void> _updateUserContribution(String userId, String fountainId) async {
     try {
+      print('Updating user contribution for user: $userId, fountain: $fountainId');
       await _firestore.collection('users').doc(userId).update({
         'contributedFountainIds': FieldValue.arrayUnion([fountainId]),
         'contributionScore': FieldValue.increment(10),
       });
+      print('User contribution updated successfully');
     } catch (e) {
       print('Failed to update user contribution: $e');
     }
