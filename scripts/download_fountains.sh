@@ -5,11 +5,11 @@ echo "Drinking Water Fountain Downloader"
 echo "========================================"
 echo
 
-# Check if Python is installed
+# Check if Python 3.12+ is installed
 if ! command -v python3 &> /dev/null; then
     if ! command -v python &> /dev/null; then
         echo "ERROR: Python is not installed"
-        echo "Please install Python 3.7+ from https://python.org"
+        echo "Please install Python 3.12+ from https://python.org"
         exit 1
     else
         PYTHON_CMD="python"

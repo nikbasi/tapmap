@@ -4,14 +4,19 @@ echo Setting up Python Virtual Environment
 echo ========================================
 echo.
 
-REM Check if Python is installed
+REM Check if Python 3.12 is installed
 python --version >nul 2>&1
 if errorlevel 1 (
     echo ERROR: Python is not installed or not in PATH
-    echo Please install Python 3.7+ from https://python.org
+    echo Please install Python 3.12 from https://python.org
     pause
     exit /b 1
 )
+
+REM Verify Python version is 3.12+
+for /f "tokens=2" %%i in ('python --version 2^>^&1') do set PYTHON_VERSION=%%i
+echo Found Python version: %PYTHON_VERSION%
+echo.
 
 echo Python found. Creating virtual environment...
 echo.

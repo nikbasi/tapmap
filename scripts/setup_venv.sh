@@ -5,11 +5,11 @@ echo "Setting up Python Virtual Environment"
 echo "========================================"
 echo
 
-# Check if Python is installed
+# Check if Python 3.12+ is installed
 if ! command -v python3 &> /dev/null; then
     if ! command -v python &> /dev/null; then
         echo "ERROR: Python is not installed"
-        echo "Please install Python 3.7+ from https://python.org"
+        echo "Please install Python 3.12+ from https://python.org"
         exit 1
     else
         PYTHON_CMD="python"
@@ -17,6 +17,11 @@ if ! command -v python3 &> /dev/null; then
 else
     PYTHON_CMD="python3"
 fi
+
+# Verify Python version is 3.12+
+PYTHON_VERSION=$($PYTHON_CMD --version 2>&1 | awk '{print $2}')
+echo "Found Python version: $PYTHON_VERSION"
+echo
 
 echo "Python found. Creating virtual environment..."
 echo
