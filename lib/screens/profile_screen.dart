@@ -525,53 +525,6 @@ class ProfileScreen extends StatelessWidget {
               Expanded(
                 child: OutlinedButton.icon(
                   onPressed: () async {
-                    await authProvider.refreshUserData();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('User data refreshed from database'),
-                        backgroundColor: AppColors.success,
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.refresh, size: 16),
-                  label: const Text('Refresh Data'),
-                  style: OutlinedButton.styleFrom(
-                    side: BorderSide(color: Colors.orange.shade400),
-                    foregroundColor: Colors.orange.shade700,
-                    padding: const EdgeInsets.symmetric(vertical: AppSizes.paddingS),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSizes.paddingS),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () {
-                    final fountainProvider = Provider.of<FountainProvider>(context, listen: false);
-                    fountainProvider.debugPrintState();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Check console for fountain provider debug info'),
-                        backgroundColor: AppColors.info,
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.map, size: 16),
-                  label: const Text('Print Fountain Data'),
-                  style: OutlinedButton.styleFrom(
-                    side: BorderSide(color: Colors.orange.shade400),
-                    foregroundColor: Colors.orange.shade700,
-                    padding: const EdgeInsets.symmetric(vertical: AppSizes.paddingS),
-                  ),
-                ),
-              ),
-              const SizedBox(width: AppSizes.paddingS),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () async {
                     final fountainProvider = Provider.of<FountainProvider>(context, listen: false);
                     await fountainProvider.refreshData();
                     ScaffoldMessenger.of(context).showSnackBar(

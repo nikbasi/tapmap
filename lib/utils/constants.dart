@@ -98,7 +98,7 @@ class AppConfig {
   static const double defaultZoom = 15.0;
   static const double minZoom = 10.0;
   static const double maxZoom = 18.0;
-  static const double searchRadiusKm = 5.0;
+  static const double searchRadiusKm = 50.0; // Increased from 5km to 50km
   
   // Cache Configuration
   static const int maxCacheSize = 100;

@@ -21,6 +21,9 @@ class Fountain {
   final List<String> tags;
   final double? rating;
   final int reviewCount;
+  final String? importSource;
+  final DateTime? importDate;
+  final Map<String, dynamic>? osmData;
 
   Fountain({
     required this.id,
@@ -38,6 +41,9 @@ class Fountain {
     required this.tags,
     this.rating,
     this.reviewCount = 0,
+    this.importSource,
+    this.importDate,
+    this.osmData,
   });
 
   factory Fountain.fromFirestore(DocumentSnapshot doc) {
@@ -59,6 +65,9 @@ class Fountain {
       tags: List<String>.from(data['tags'] ?? []),
       rating: data['rating']?.toDouble(),
       reviewCount: data['reviewCount'] ?? 0,
+      importSource: data['importSource'],
+      importDate: data['importDate'] != null ? (data['importDate'] as Timestamp).toDate() : null,
+      osmData: data['osmData'],
     );
   }
 
@@ -78,6 +87,9 @@ class Fountain {
       'tags': tags,
       'rating': rating,
       'reviewCount': reviewCount,
+      'importSource': importSource,
+      'importDate': importDate != null ? Timestamp.fromDate(importDate!) : null,
+      'osmData': osmData,
     };
   }
 
@@ -97,6 +109,9 @@ class Fountain {
     List<String>? tags,
     double? rating,
     int? reviewCount,
+    String? importSource,
+    DateTime? importDate,
+    Map<String, dynamic>? osmData,
   }) {
     return Fountain(
       id: id ?? this.id,
@@ -114,6 +129,9 @@ class Fountain {
       tags: tags ?? this.tags,
       rating: rating ?? this.rating,
       reviewCount: reviewCount ?? this.reviewCount,
+      importSource: importSource ?? this.importSource,
+      importDate: importDate ?? this.importDate,
+      osmData: osmData ?? this.osmData,
     );
   }
 
@@ -220,6 +238,45 @@ class Fountain {
         return 'Restricted';
       case Accessibility.private:
         return 'Private';
+    }
+  }
+  
+  // Import-related helper methods
+  bool get isImported => importSource != null;
+  bool get isOsmImported => importSource == 'italy_osm' || addedBy == 'osm_import_italy';
+  
+  String get displayName {
+    if (isOsmImported && (name.isEmpty || name == 'Unnamed Fountain')) {
+      return 'Italian ${typeDisplayName}';
+    }
+    return name;
+  }
+  
+  String get importSourceDisplayName {
+    if (importSource == 'italy_osm') return '🇮🇹 Italy (OSM)';
+    if (addedBy == 'osm_import_italy') return '🇮🇹 Italy (OSM)';
+    if (importSource != null) return '🌍 OpenStreetMap';
+    return '📱 User Added';
+  }
+  
+  bool get isRecentImport {
+    if (importDate == null) return false;
+    final daysSinceImport = DateTime.now().difference(importDate!).inDays;
+    return daysSinceImport <= 30;
+  }
+  
+  String get importStatusBadge {
+    if (importDate == null) return 'Unknown';
+    
+    if (isRecentImport) {
+      return '🆕 Recent';
+    }
+    
+    final monthsSinceImport = DateTime.now().difference(importDate!).inDays ~/ 30;
+    if (monthsSinceImport < 6) {
+      return '✅ Current';
+    } else {
+      return '📅 Older';
     }
   }
 }

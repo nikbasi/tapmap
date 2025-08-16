@@ -80,6 +80,241 @@ class FountainProvider extends ChangeNotifier {
     }
   }
 
+  // Load all fountains from the database (useful for testing and viewing imported data)
+  Future<List<Fountain>> getAllFountains() async {
+    try {
+      _setLoading(true);
+      _clearError();
+
+      // First, get the total count to show progress
+      final countSnapshot = await _firestore
+          .collection('fountains')
+          .where('status', isEqualTo: 'active')
+          .count()
+          .get();
+      
+      final totalCount = countSnapshot.count;
+      print('Total fountains in database: $totalCount');
+
+      // Load fountains in larger batches for better performance
+      final querySnapshot = await _firestore
+          .collection('fountains')
+          .where('status', isEqualTo: 'active')
+          .limit(5000) // Increased limit to show more fountains
+          .get();
+
+      final allFountains = querySnapshot.docs
+          .map((doc) => Fountain.fromFirestore(doc))
+          .toList();
+
+      print('Loaded ${allFountains.length} fountains (showing up to 5000)');
+      _setLoading(false);
+      return allFountains;
+    } catch (e) {
+      _setError('Failed to load all fountains: $e');
+      _setLoading(false);
+      return [];
+    }
+  }
+
+  // Load fountains with pagination for better performance
+  Future<List<Fountain>> getFountainsWithPagination({
+    int limit = 1000,
+    DocumentSnapshot? lastDocument,
+    String? importSource,
+  }) async {
+    try {
+      _setLoading(true);
+      _clearError();
+
+      Query query = _firestore
+          .collection('fountains')
+          .where('status', isEqualTo: 'active')
+          .limit(limit);
+
+      // Filter by import source if specified
+      if (importSource != null) {
+        query = query.where('importSource', isEqualTo: importSource);
+      }
+
+      // Start after last document for pagination
+      if (lastDocument != null) {
+        query = query.startAfterDocument(lastDocument);
+      }
+
+      final querySnapshot = await query.get();
+      
+      final fountains = querySnapshot.docs
+          .map((doc) => Fountain.fromFirestore(doc))
+          .toList();
+
+      _setLoading(false);
+      return fountains;
+    } catch (e) {
+      _setError('Failed to load fountains with pagination: $e');
+      _setLoading(false);
+      return [];
+    }
+  }
+
+  // Get fountain count for progress display
+  Future<int> getFountainCount({String? importSource}) async {
+    try {
+      Query query = _firestore
+          .collection('fountains')
+          .where('status', isEqualTo: 'active');
+
+      if (importSource != null) {
+        query = query.where('importSource', isEqualTo: importSource);
+      }
+
+      final countSnapshot = await query.count().get();
+      return countSnapshot.count ?? 0;
+    } catch (e) {
+      print('Failed to get fountain count: $e');
+      return 0;
+    }
+  }
+
+  // Load fountains in viewport - simplified version
+  Future<List<Fountain>> getFountainsInViewport({
+    required double northLat,
+    required double southLat,
+    required double eastLon,
+    required double westLon,
+    required double zoomLevel,
+    String? importSource,
+  }) async {
+    try {
+      _setLoading(true);
+      _clearError();
+
+      print('Loading fountains in viewport:');
+      print('Latitude range: $southLat to $northLat');
+      print('Longitude range: $westLon to $eastLon');
+      print('Zoom level: $zoomLevel');
+
+      // Use a simpler query approach that doesn't require complex indexes
+      Query query = _firestore
+          .collection('fountains')
+          .limit(1000); // Reasonable limit for testing
+
+      if (importSource != null) {
+        query = query.where('importSource', isEqualTo: importSource);
+      }
+
+      final querySnapshot = await query.get();
+      print('Raw query returned ${querySnapshot.docs.length} documents');
+
+      // Filter fountains in memory based on viewport bounds
+      final fountains = <Fountain>[];
+      int totalChecked = 0;
+      int inLatRange = 0;
+      int inLonRange = 0;
+      int activeStatus = 0;
+      
+      for (final doc in querySnapshot.docs) {
+        try {
+          totalChecked++;
+          final fountain = Fountain.fromFirestore(doc);
+          
+          // Check if fountain is within viewport bounds
+          bool inLat = fountain.location.latitude >= southLat && fountain.location.latitude <= northLat;
+          bool inLon = fountain.location.longitude >= westLon && fountain.location.longitude <= eastLon;
+          
+          if (inLat) inLatRange++;
+          if (inLon) inLonRange++;
+          if (fountain.status == FountainStatus.active) activeStatus++;
+          
+          if (inLat && inLon && fountain.status == FountainStatus.active) {
+            fountains.add(fountain);
+          }
+        } catch (e) {
+          print('Error parsing fountain document: $e');
+        }
+      }
+
+      print('Found ${fountains.length} fountains in viewport (${totalChecked} checked)');
+      
+      _setLoading(false);
+      return fountains;
+
+    } catch (e) {
+      print('Error in getFountainsInViewport: $e');
+      _setLoading(false);
+      _setError('Failed to load fountains: $e');
+      return [];
+    }
+  }
+
+  // Load fountains by region (much more efficient than loading all)
+  Future<List<Fountain>> getFountainsByRegion({
+    required double centerLat,
+    required double centerLon,
+    required double radiusKm,
+    String? importSource,
+    int limit = 2000,
+  }) async {
+    try {
+      _setLoading(true);
+      _clearError();
+
+      // Calculate bounding box for the region
+      final latDelta = radiusKm / 111.0; // 1 degree = ~111 km
+      final lonDelta = radiusKm / (111.0 * cos(centerLat * pi / 180));
+
+      Query query = _firestore
+          .collection('fountains')
+          .where('status', isEqualTo: 'active')
+          .where('location.latitude', isGreaterThanOrEqualTo: centerLat - latDelta)
+          .where('location.latitude', isLessThanOrEqualTo: centerLat + latDelta)
+          .limit(limit);
+
+      if (importSource != null) {
+        query = query.where('importSource', isEqualTo: importSource);
+      }
+
+      final querySnapshot = await query.get();
+      
+      // Filter by longitude and calculate actual distances
+      final regionFountains = querySnapshot.docs
+          .map((doc) => Fountain.fromFirestore(doc))
+          .where((fountain) {
+        final distance = _calculateDistance(
+          centerLat,
+          centerLon,
+          fountain.location.latitude,
+          fountain.location.longitude,
+        );
+        return distance <= radiusKm;
+      }).toList();
+
+      // Sort by distance
+      regionFountains.sort((a, b) {
+        final distanceA = _calculateDistance(
+          centerLat,
+          centerLon,
+          a.location.latitude,
+          a.location.longitude,
+        );
+        final distanceB = _calculateDistance(
+          centerLat,
+          centerLon,
+          b.location.latitude,
+          b.location.longitude,
+        );
+        return distanceA.compareTo(distanceB);
+      });
+
+      _setLoading(false);
+      return regionFountains;
+    } catch (e) {
+      _setError('Failed to load fountains by region: $e');
+      _setLoading(false);
+      return [];
+    }
+  }
+
   // Load fountains near a specific location
   Future<List<Fountain>> loadFountainsNearLocation(
     double latitude,
@@ -548,19 +783,6 @@ class FountainProvider extends ChangeNotifier {
   Future<void> refreshData() async {
     await _loadFountains();
     notifyListeners();
-  }
-
-  // Debug method to print current state
-  void debugPrintState() {
-    print('=== FOUNTAIN PROVIDER DEBUG ===');
-    print('Total Fountains: ${_fountains.length}');
-    print('Filtered Fountains: ${_filteredFountains.length}');
-    print('Selected Fountain: ${_selectedFountain?.id ?? 'None'}');
-    print('Is Loading: $_isLoading');
-    print('Error: $_error');
-    print('Search Query: $_searchQuery');
-    print('Filters: $_filters');
-    print('===============================');
   }
 
   // Calculate distance between two points using Haversine formula

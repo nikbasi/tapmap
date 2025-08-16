@@ -20,70 +20,101 @@ class _MapScreenState extends State<MapScreen> {
   Fountain? _selectedFountain;
   final List<Marker> _markers = [];
   final MapController _mapController = MapController();
-  bool _isSatelliteView = false; // Track map type
+  bool _isSatelliteView = false;
 
   @override
   void initState() {
     super.initState();
-    _loadNearbyFountains();
-    _initializeMapWithUserLocation();
+    _initializeMap();
+  }
+
+  Future<void> _initializeMap() async {
+    // Wait for the map to be fully initialized
+    await Future.delayed(const Duration(milliseconds: 1000));
     
-    // Listen to location changes
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final locationProvider = Provider.of<LocationProvider>(context, listen: false);
-      locationProvider.addListener(_onLocationChanged);
-    });
-  }
-
-  @override
-  void dispose() {
-    // Remove listener
-    final locationProvider = Provider.of<LocationProvider>(context, listen: false);
-    locationProvider.removeListener(_onLocationChanged);
-    super.dispose();
-  }
-
-  void _onLocationChanged() {
-    // Update markers when location changes
-    _addFountainMarkers();
-  }
-
-  void _toggleMapType() {
-    setState(() {
-      _isSatelliteView = !_isSatelliteView;
-    });
-  }
-
-  Future<void> _initializeMapWithUserLocation() async {
+    if (!mounted) return;
+    
     final locationProvider = Provider.of<LocationProvider>(context, listen: false);
     final position = locationProvider.currentPosition;
     
     if (position != null) {
-      // Center map on user's location
-      _mapController.move(
-        LatLng(position.latitude, position.longitude),
-        AppConfig.defaultZoom,
-      );
+      try {
+        _mapController.move(
+          LatLng(position.latitude, position.longitude),
+          AppConfig.defaultZoom,
+        );
+      } catch (e) {
+        print('Map not ready yet: $e');
+      }
     }
   }
 
-  Future<void> _loadNearbyFountains() async {
-    final locationProvider = Provider.of<LocationProvider>(context, listen: false);
-    final position = locationProvider.currentPosition;
-    
-    if (position != null) {
+  // Simple method to load fountains in current map area
+  Future<void> _loadFountainsInMapArea() async {
+    try {
       final fountainProvider = Provider.of<FountainProvider>(context, listen: false);
-      final fountains = await fountainProvider.loadFountainsNearLocation(
-        position.latitude,
-        position.longitude,
-        AppConfig.searchRadiusKm,
+      
+      // Get current map bounds
+      final bounds = _mapController.bounds;
+      final zoom = _mapController.zoom;
+      
+      print('=== DEBUGGING FOUNTAIN LOADING ===');
+      print('Map zoom: $zoom');
+      print('Map bounds: $bounds');
+      
+      if (bounds != null) {
+        print('NorthEast: ${bounds.northEast.latitude}, ${bounds.northEast.longitude}');
+        print('SouthWest: ${bounds.southWest.latitude}, ${bounds.southWest.longitude}');
+        
+        // Calculate viewport area
+        final latSpan = bounds.northEast.latitude - bounds.southWest.latitude;
+        final lonSpan = bounds.northEast.longitude - bounds.southWest.longitude;
+        final areaSqKm = latSpan * lonSpan * 111.0 * 111.0;
+        print('Viewport area: ${areaSqKm.toStringAsFixed(2)} km²');
+        
+        // Load fountains in the current map area
+        final fountains = await fountainProvider.getFountainsInViewport(
+          northLat: bounds.northEast.latitude,
+          southLat: bounds.southWest.latitude,
+          eastLon: bounds.northEast.longitude,
+          westLon: bounds.southWest.longitude,
+          zoomLevel: zoom,
+        );
+        
+        print('Query returned ${fountains.length} fountains');
+        
+        setState(() {
+          _nearbyFountains = fountains;
+        });
+        
+        _addFountainMarkers();
+        
+        // Show result
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Found ${fountains.length} fountains in this area'),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      } else {
+        print('Map bounds are NULL - this is the problem!');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Map not ready yet. Please wait a moment and try again.'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error loading fountains: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error loading fountains: $e'),
+          duration: const Duration(seconds: 3),
+        ),
       );
-      
-      setState(() {
-        _nearbyFountains = fountains;
-      });
-      
-      _addFountainMarkers();
     }
   }
 
@@ -131,10 +162,20 @@ class _MapScreenState extends State<MapScreen> {
           height: 40,
           child: GestureDetector(
             onTap: () => _onMarkerTapped(fountain),
-            child: Icon(
-              _getFountainIcon(fountain),
-              color: Colors.blue,
-              size: 30,
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.blue,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: Colors.white,
+                  width: 2,
+                ),
+              ),
+              child: Icon(
+                _getFountainIcon(fountain),
+                color: Colors.white,
+                size: 24,
+              ),
             ),
           ),
         ),
@@ -156,7 +197,6 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void _onMapTap(TapPosition tapPosition, LatLng coordinates) {
-    // Deselect fountain when clicking on empty map area
     setState(() {
       _selectedFountain = null;
     });
@@ -173,24 +213,17 @@ class _MapScreenState extends State<MapScreen> {
     final position = await locationProvider.getCurrentLocation();
     
     if (position != null) {
-      // Smoothly center map on user's current location
       _mapController.move(
         LatLng(position.latitude, position.longitude),
         AppConfig.defaultZoom,
       );
-      
-      // Reload fountains at current location
-      await _loadNearbyFountains();
     }
   }
 
-  void _searchNearby() async {
-    final locationProvider = Provider.of<LocationProvider>(context, listen: false);
-    final position = locationProvider.currentPosition;
-    
-    if (position != null) {
-      await _loadNearbyFountains();
-    }
+  void _toggleMapType() {
+    setState(() {
+      _isSatelliteView = !_isSatelliteView;
+    });
   }
 
   @override
@@ -219,8 +252,6 @@ class _MapScreenState extends State<MapScreen> {
                         ? AppConfig.esriSatelliteUrl 
                         : AppConfig.osmTileUrl,
                     userAgentPackageName: 'com.example.water_fountain_finder',
-                    // Attributions API changed in flutter_map 6.x
-                    // Provide attributions via nonRotatedChildren with an Align widget if needed
                   ),
                   MarkerLayer(markers: _markers),
                   RichAttributionWidget(
@@ -246,18 +277,11 @@ class _MapScreenState extends State<MapScreen> {
             child: _buildTopBar(),
           ),
 
-          // Current location button
+          // Load fountains button
           Positioned(
             bottom: MediaQuery.of(context).padding.bottom + 100,
             right: AppSizes.paddingM,
-            child: _buildCurrentLocationButton(),
-          ),
-
-          // Map type toggle button
-          Positioned(
-            bottom: MediaQuery.of(context).padding.bottom + 180,
-            right: AppSizes.paddingM,
-            child: _buildMapTypeToggleButton(),
+            child: _buildLoadFountainsButton(),
           ),
 
           // Fountain info card
@@ -300,39 +324,35 @@ class _MapScreenState extends State<MapScreen> {
       child: Row(
         children: [
           Expanded(
-            child: GestureDetector(
-              onTap: _searchNearby,
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSizes.paddingM,
-                  vertical: AppSizes.paddingS,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(AppSizes.radiusM),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.search,
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSizes.paddingM,
+                vertical: AppSizes.paddingS,
+              ),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(AppSizes.radiusM),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.search,
+                    color: Colors.grey.shade600,
+                    size: 20,
+                  ),
+                  const SizedBox(width: AppSizes.paddingS),
+                  Text(
+                    'Tap the button below to find fountains in this area',
+                    style: TextStyle(
                       color: Colors.grey.shade600,
-                      size: 20,
+                      fontSize: 14,
                     ),
-                    const SizedBox(width: AppSizes.paddingS),
-                    Text(
-                      'Search nearby fountains...',
-                      style: TextStyle(
-                        color: Colors.grey.shade600,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ),
           const SizedBox(width: AppSizes.paddingS),
-          // Map type toggle button
           IconButton(
             onPressed: _toggleMapType,
             icon: Icon(
@@ -374,7 +394,7 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  Widget _buildCurrentLocationButton() {
+  Widget _buildLoadFountainsButton() {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -387,50 +407,40 @@ class _MapScreenState extends State<MapScreen> {
           ),
         ],
       ),
-      child: Consumer<LocationProvider>(
-        builder: (context, locationProvider, child) {
-          return IconButton(
-            onPressed: locationProvider.isLoading ? null : _goToCurrentLocation,
-            icon: locationProvider.isLoading
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
-                    ),
-                  )
-                : const Icon(
-                    Icons.my_location,
-                    color: AppColors.primary,
-                  ),
-            tooltip: 'Current location',
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildMapTypeToggleButton() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(AppSizes.radiusL),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Fountain count display
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSizes.paddingS,
+              vertical: AppSizes.paddingXS,
+            ),
+            decoration: BoxDecoration(
+              color: AppColors.primary,
+              borderRadius: BorderRadius.circular(AppSizes.radiusM),
+            ),
+            child: Text(
+              '${_nearbyFountains.length}',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          // Load fountains button
+          IconButton(
+            onPressed: _loadFountainsInMapArea,
+            icon: const Icon(
+              Icons.water_drop,
+              color: AppColors.primary,
+              size: 32,
+            ),
+            tooltip: 'Find fountains in this map area',
           ),
         ],
-      ),
-      child: IconButton(
-        onPressed: _toggleMapType,
-        icon: Icon(
-          _isSatelliteView ? Icons.map : Icons.satellite,
-          color: _isSatelliteView ? AppColors.accent : AppColors.primary,
-        ),
-        tooltip: _isSatelliteView ? 'Switch to street view' : 'Switch to satellite view',
       ),
     );
   }
