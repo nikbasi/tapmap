@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
 import 'package:water_fountain_finder/providers/auth_provider.dart';
-import 'package:water_fountain_finder/providers/fountain_provider.dart';
+import 'package:water_fountain_finder/providers/local_fountain_provider.dart';
 import 'package:water_fountain_finder/providers/location_provider.dart';
 import 'package:water_fountain_finder/screens/splash_screen.dart';
 import 'package:water_fountain_finder/screens/sign_in_screen.dart';
@@ -55,7 +55,7 @@ class WaterFountainFinderApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
-        ChangeNotifierProvider(create: (_) => FountainProvider()),
+        ChangeNotifierProvider(create: (_) => LocalFountainProvider()),
         ChangeNotifierProvider(create: (_) => LocationProvider()),
       ],
       child: MaterialApp(

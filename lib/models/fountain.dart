@@ -24,6 +24,10 @@ class Fountain {
   final String? importSource;
   final DateTime? importDate;
   final Map<String, dynamic>? osmData;
+  // Geohash fields for efficient geographic queries
+  final String? geohash;
+  final String? geohash4;
+  final String? geohash3;
 
   Fountain({
     required this.id,
@@ -44,6 +48,9 @@ class Fountain {
     this.importSource,
     this.importDate,
     this.osmData,
+    this.geohash,
+    this.geohash4,
+    this.geohash3,
   });
 
   factory Fountain.fromFirestore(DocumentSnapshot doc) {
@@ -68,6 +75,9 @@ class Fountain {
       importSource: data['importSource'],
       importDate: data['importDate'] != null ? (data['importDate'] as Timestamp).toDate() : null,
       osmData: data['osmData'],
+      geohash: data['geohash'],
+      geohash4: data['geohash4'],
+      geohash3: data['geohash3'],
     );
   }
 
@@ -90,6 +100,9 @@ class Fountain {
       'importSource': importSource,
       'importDate': importDate != null ? Timestamp.fromDate(importDate!) : null,
       'osmData': osmData,
+      'geohash': geohash,
+      'geohash4': geohash4,
+      'geohash3': geohash3,
     };
   }
 
@@ -112,6 +125,9 @@ class Fountain {
     String? importSource,
     DateTime? importDate,
     Map<String, dynamic>? osmData,
+    String? geohash,
+    String? geohash4,
+    String? geohash3,
   }) {
     return Fountain(
       id: id ?? this.id,
@@ -132,6 +148,9 @@ class Fountain {
       importSource: importSource ?? this.importSource,
       importDate: importDate ?? this.importDate,
       osmData: osmData ?? this.osmData,
+      geohash: geohash ?? this.geohash,
+      geohash4: geohash4 ?? this.geohash4,
+      geohash3: geohash3 ?? this.geohash3,
     );
   }
 

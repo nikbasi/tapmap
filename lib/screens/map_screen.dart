@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:water_fountain_finder/providers/fountain_provider.dart';
+import 'package:water_fountain_finder/providers/local_fountain_provider.dart';
 import 'package:water_fountain_finder/providers/location_provider.dart';
-import 'package:water_fountain_finder/models/fountain.dart';
+import 'package:water_fountain_finder/models/local_fountain.dart';
 import 'package:water_fountain_finder/utils/constants.dart';
 import 'package:water_fountain_finder/widgets/fountain_info_card.dart';
 
@@ -16,11 +16,12 @@ class MapScreen extends StatefulWidget {
 }
 
 class _MapScreenState extends State<MapScreen> {
-  List<Fountain> _nearbyFountains = [];
-  Fountain? _selectedFountain;
+  List<LocalFountain> _visibleFountains = [];
+  LocalFountain? _selectedFountain;
   final List<Marker> _markers = [];
   final MapController _mapController = MapController();
   bool _isSatelliteView = false;
+  bool _isLoadingFountains = false;
 
   @override
   void initState() {
@@ -43,187 +44,160 @@ class _MapScreenState extends State<MapScreen> {
           LatLng(position.latitude, position.longitude),
           AppConfig.defaultZoom,
         );
+        
+        // Wait a bit more for the map to settle, then load fountains
+        await Future.delayed(const Duration(milliseconds: 500));
+        if (mounted) {
+          await _loadFountainsInMapArea();
+        }
       } catch (e) {
-        print('Map not ready yet: $e');
+        print('Map initialization error: $e');
+      }
+    } else {
+      // If no user location, move to default location and try to load fountains
+      try {
+        _mapController.move(
+          AppConfig.defaultLocation,
+          AppConfig.defaultZoom,
+        );
+        
+        await Future.delayed(const Duration(milliseconds: 500));
+        if (mounted) {
+          await _loadFountainsInMapArea();
+        }
+      } catch (e) {
+        print('Map initialization error: $e');
       }
     }
   }
 
-  // Simple method to load fountains in current map area
   Future<void> _loadFountainsInMapArea() async {
+    if (!mounted) return;
+    
     try {
-      final fountainProvider = Provider.of<FountainProvider>(context, listen: false);
-      
-      // Get current map bounds
+      setState(() {
+        _isLoadingFountains = true;
+      });
+
       final bounds = _mapController.bounds;
-      final zoom = _mapController.zoom;
+      if (bounds == null) {
+        print('Map bounds not available yet');
+        return;
+      }
+
+      print('🗺️ Loading fountains for map bounds: N:${bounds.northEast.latitude}, S:${bounds.southWest.latitude}, E:${bounds.northEast.longitude}, W:${bounds.southWest.longitude}');
       
-      print('=== DEBUGGING FOUNTAIN LOADING ===');
-      print('Map zoom: $zoom');
-      print('Map bounds: $bounds');
+      final fountainProvider = Provider.of<LocalFountainProvider>(context, listen: false);
       
-      if (bounds != null) {
-        print('NorthEast: ${bounds.northEast.latitude}, ${bounds.northEast.longitude}');
-        print('SouthWest: ${bounds.southWest.latitude}, ${bounds.southWest.longitude}');
-        
-        // Calculate viewport area
-        final latSpan = bounds.northEast.latitude - bounds.southWest.latitude;
-        final lonSpan = bounds.northEast.longitude - bounds.southWest.longitude;
-        final areaSqKm = latSpan * lonSpan * 111.0 * 111.0;
-        print('Viewport area: ${areaSqKm.toStringAsFixed(2)} km²');
-        
-        // Load fountains in the current map area
-        final fountains = await fountainProvider.getFountainsInViewport(
-          northLat: bounds.northEast.latitude,
-          southLat: bounds.southWest.latitude,
-          eastLon: bounds.northEast.longitude,
-          westLon: bounds.southWest.longitude,
-          zoomLevel: zoom,
-        );
-        
-        print('Query returned ${fountains.length} fountains');
-        
+      final result = await fountainProvider.getFountainsInViewport(
+        northLat: bounds.northEast.latitude,
+        southLat: bounds.southWest.latitude,
+        eastLon: bounds.northEast.longitude,
+        westLon: bounds.southWest.longitude,
+        zoomLevel: _mapController.zoom,
+      );
+      
+      print('📱 Map screen received ${result.length} fountains');
+      
+      if (mounted) {
         setState(() {
-          _nearbyFountains = fountains;
+          _visibleFountains = result;
+          _addFountainMarkers();
+          _isLoadingFountains = false;
         });
-        
-        _addFountainMarkers();
-        
-        // Show result
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Found ${fountains.length} fountains in this area'),
-              duration: const Duration(seconds: 2),
-            ),
-          );
-        }
-      } else {
-        print('Map bounds are NULL - this is the problem!');
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Map not ready yet. Please wait a moment and try again.'),
-            duration: const Duration(seconds: 2),
-          ),
-        );
       }
     } catch (e) {
-      print('Error loading fountains: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error loading fountains: $e'),
-          duration: const Duration(seconds: 3),
-        ),
-      );
+      print('❌ Error loading fountains in map area: $e');
+      if (mounted) {
+        setState(() {
+          _isLoadingFountains = false;
+        });
+      }
     }
   }
 
   void _addFountainMarkers() {
     _markers.clear();
     
-    // Add user location marker
-    final locationProvider = Provider.of<LocationProvider>(context, listen: false);
-    final userPosition = locationProvider.currentPosition;
-    
-    if (userPosition != null) {
+    for (final fountain in _visibleFountains) {
       _markers.add(
         Marker(
-          point: LatLng(userPosition.latitude, userPosition.longitude),
-          width: 50,
-          height: 50,
-          child: Container(
-            decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.2),
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: AppColors.primary,
-                width: 2,
-              ),
-            ),
-            child: Icon(
-              Icons.my_location,
-              color: AppColors.primary,
-              size: 24,
-            ),
-          ),
-        ),
-      );
-    }
-    
-    // Add fountain markers
-    for (final fountain in _nearbyFountains) {
-      _markers.add(
-        Marker(
-          point: LatLng(
-            fountain.location.latitude,
-            fountain.location.longitude,
-          ),
+          point: fountain.location,
           width: 40,
           height: 40,
           child: GestureDetector(
-            onTap: () => _onMarkerTapped(fountain),
+            onTap: () => _showFountainInfo(fountain),
             child: Container(
               decoration: BoxDecoration(
-                color: Colors.blue,
+                color: fountain.isActive ? Colors.green : Colors.red,
                 shape: BoxShape.circle,
-                border: Border.all(
-                  color: Colors.white,
-                  width: 2,
-                ),
+                border: Border.all(color: Colors.white, width: 2),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.3),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
               child: Icon(
-                _getFountainIcon(fountain),
+                _getFountainIcon(fountain.type),
                 color: Colors.white,
-                size: 24,
+                size: 20,
               ),
             ),
           ),
         ),
       );
     }
-    
-    setState(() {});
   }
 
-  IconData _getFountainIcon(Fountain fountain) {
-    switch (fountain.type) {
-      case FountainType.fountain:
+  IconData _getFountainIcon(LocalFountainType type) {
+    switch (type) {
+      case LocalFountainType.fountain:
         return Icons.water_drop;
-      case FountainType.tap:
+      case LocalFountainType.tap:
         return Icons.tap_and_play;
-      case FountainType.refillStation:
+      case LocalFountainType.refillStation:
         return Icons.local_drink;
     }
   }
 
-  void _onMapTap(TapPosition tapPosition, LatLng coordinates) {
-    setState(() {
-      _selectedFountain = null;
-    });
-  }
-
-  void _onMarkerTapped(Fountain fountain) {
+  void _showFountainInfo(LocalFountain fountain) {
     setState(() {
       _selectedFountain = fountain;
     });
   }
 
-  void _goToCurrentLocation() async {
-    final locationProvider = Provider.of<LocationProvider>(context, listen: false);
-    final position = await locationProvider.getCurrentLocation();
-    
-    if (position != null) {
-      _mapController.move(
-        LatLng(position.latitude, position.longitude),
-        AppConfig.defaultZoom,
-      );
+  void _hideFountainInfo() {
+    setState(() {
+      _selectedFountain = null;
+    });
+  }
+
+  void _onMapTap(TapPosition tapPosition, LatLng point) {
+    _hideFountainInfo();
+  }
+
+  void _onMapMoved(MapPosition position, bool hasGesture) {
+    if (hasGesture) {
+      // Debounce map movement to avoid too many API calls
+      Future.delayed(const Duration(milliseconds: 300), () {
+        if (mounted) {
+          _loadFountainsInMapArea();
+        }
+      });
     }
   }
 
-  void _toggleMapType() {
+  void _toggleSatelliteView() {
     setState(() {
       _isSatelliteView = !_isSatelliteView;
     });
+  }
+
+  void _refreshFountains() async {
+    await _loadFountainsInMapArea();
   }
 
   @override
@@ -231,215 +205,172 @@ class _MapScreenState extends State<MapScreen> {
     return Scaffold(
       body: Stack(
         children: [
-          // Map
-          Consumer<LocationProvider>(
-            builder: (context, locationProvider, child) {
-              final userPosition = locationProvider.currentPosition;
-              final initialCenter = userPosition != null 
-                  ? LatLng(userPosition.latitude, userPosition.longitude)
-                  : const LatLng(40.7128, -74.0060); // Default to NYC if no user location
-              
-              return FlutterMap(
-                mapController: _mapController,
-                options: MapOptions(
-                  initialCenter: initialCenter,
-                  initialZoom: AppConfig.defaultZoom,
-                  onTap: _onMapTap,
-                ),
-                children: [
-                  TileLayer(
-                    urlTemplate: _isSatelliteView 
-                        ? AppConfig.esriSatelliteUrl 
-                        : AppConfig.osmTileUrl,
-                    userAgentPackageName: 'com.example.water_fountain_finder',
-                  ),
-                  MarkerLayer(markers: _markers),
-                  RichAttributionWidget(
-                    attributions: [
-                      TextSourceAttribution(
-                        _isSatelliteView 
-                            ? AppConfig.esriSatelliteAttribution 
-                            : AppConfig.osmAttribution,
-                        onTap: () {},
+          FlutterMap(
+            mapController: _mapController,
+            options: MapOptions(
+              initialCenter: AppConfig.defaultLocation,
+              initialZoom: AppConfig.defaultZoom,
+              onMapReady: () {
+                print('🗺️ Map is ready');
+              },
+              onTap: _onMapTap,
+              onPositionChanged: _onMapMoved,
+            ),
+            children: [
+              TileLayer(
+                urlTemplate: _isSatelliteView 
+                    ? AppConfig.satelliteTileUrl 
+                    : AppConfig.streetTileUrl,
+                userAgentPackageName: 'com.example.water_fountain_finder',
+              ),
+              MarkerLayer(markers: _markers),
+            ],
+          ),
+          
+          // Top bar with controls
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 10,
+            left: 10,
+            right: 10,
+            child: Row(
+              children: [
+                // Toggle satellite view
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
                       ),
                     ],
                   ),
-                ],
-              );
-            },
+                  child: IconButton(
+                    onPressed: _toggleSatelliteView,
+                    icon: Icon(
+                      _isSatelliteView ? Icons.map : Icons.satellite,
+                      color: _isSatelliteView ? Colors.blue : Colors.grey,
+                    ),
+                    tooltip: _isSatelliteView ? 'Switch to Map' : 'Switch to Satellite',
+                  ),
+                ),
+                
+                const SizedBox(width: 10),
+                
+                // Refresh button
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: IconButton(
+                    onPressed: _refreshFountains,
+                    icon: Icon(
+                      Icons.refresh,
+                      color: _isLoadingFountains ? Colors.grey : Colors.blue,
+                    ),
+                    tooltip: 'Refresh Fountains',
+                  ),
+                ),
+                
+                const Spacer(),
+                
+                // Fountain count indicator
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.water_drop,
+                        size: 16,
+                        color: Colors.blue,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${_visibleFountains.length}',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
-
-          // Top app bar
-          Positioned(
-            top: MediaQuery.of(context).padding.top + AppSizes.paddingM,
-            left: AppSizes.paddingM,
-            right: AppSizes.paddingM,
-            child: _buildTopBar(),
-          ),
-
-          // Load fountains button
-          Positioned(
-            bottom: MediaQuery.of(context).padding.bottom + 100,
-            right: AppSizes.paddingM,
-            child: _buildLoadFountainsButton(),
-          ),
-
-          // Fountain info card
+          
+          // Loading indicator
+          if (_isLoadingFountains)
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 80,
+              left: 10,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'Loading fountains...',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          
+          // Selected fountain info card
           if (_selectedFountain != null)
             Positioned(
-              bottom: MediaQuery.of(context).padding.bottom + 100,
-              left: AppSizes.paddingM,
-              right: AppSizes.paddingM,
+              bottom: 20,
+              left: 20,
+              right: 20,
               child: FountainInfoCard(
                 fountain: _selectedFountain!,
-                onClose: () {
-                  setState(() {
-                    _selectedFountain = null;
-                  });
-                },
+                onClose: _hideFountainInfo,
               ),
             ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTopBar() {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSizes.paddingM,
-        vertical: AppSizes.paddingS,
-      ),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(AppSizes.radiusL),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSizes.paddingM,
-                vertical: AppSizes.paddingS,
-              ),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(AppSizes.radiusM),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.search,
-                    color: Colors.grey.shade600,
-                    size: 20,
-                  ),
-                  const SizedBox(width: AppSizes.paddingS),
-                  Text(
-                    'Tap the button below to find fountains in this area',
-                    style: TextStyle(
-                      color: Colors.grey.shade600,
-                      fontSize: 14,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(width: AppSizes.paddingS),
-          IconButton(
-            onPressed: _toggleMapType,
-            icon: Icon(
-              _isSatelliteView ? Icons.map : Icons.satellite,
-              color: _isSatelliteView ? AppColors.accent : AppColors.primary,
-            ),
-            tooltip: _isSatelliteView ? 'Switch to street view' : 'Switch to satellite view',
-          ),
-          const SizedBox(width: AppSizes.paddingS),
-          Consumer<LocationProvider>(
-            builder: (context, locationProvider, child) {
-              return IconButton(
-                onPressed: locationProvider.hasLocationPermission
-                    ? (locationProvider.isLoading ? null : _goToCurrentLocation)
-                    : () => locationProvider.requestLocationPermission(),
-                icon: locationProvider.isLoading
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
-                        ),
-                      )
-                    : Icon(
-                        locationProvider.hasLocationPermission
-                            ? Icons.my_location
-                            : Icons.location_off,
-                        color: locationProvider.hasLocationPermission
-                            ? AppColors.primary
-                            : Colors.grey,
-                      ),
-                tooltip: 'Go to current location',
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLoadFountainsButton() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(AppSizes.radiusL),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Fountain count display
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSizes.paddingS,
-              vertical: AppSizes.paddingXS,
-            ),
-            decoration: BoxDecoration(
-              color: AppColors.primary,
-              borderRadius: BorderRadius.circular(AppSizes.radiusM),
-            ),
-            child: Text(
-              '${_nearbyFountains.length}',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          // Load fountains button
-          IconButton(
-            onPressed: _loadFountainsInMapArea,
-            icon: const Icon(
-              Icons.water_drop,
-              color: AppColors.primary,
-              size: 32,
-            ),
-            tooltip: 'Find fountains in this map area',
-          ),
         ],
       ),
     );

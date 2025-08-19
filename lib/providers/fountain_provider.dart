@@ -1,10 +1,10 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart' show FirebaseException;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:water_fountain_finder/models/fountain.dart';
 import 'package:water_fountain_finder/models/user.dart';
 import 'package:water_fountain_finder/providers/auth_provider.dart';
+import 'package:water_fountain_finder/utils/geohash_utils.dart';
 
 class FountainProvider extends ChangeNotifier {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -28,11 +28,9 @@ class FountainProvider extends ChangeNotifier {
   // Simple check for Firebase availability
   bool get isFirebaseAvailable {
     try {
-      // Try to access a simple Firebase property to check availability
       _firestore.app.name;
       return true;
     } catch (e) {
-      print('Firebase not available in FountainProvider: $e');
       return false;
     }
   }
@@ -40,10 +38,7 @@ class FountainProvider extends ChangeNotifier {
   // Manually trigger fountain loading (useful for retrying after Firebase initialization)
   Future<void> retryLoadFountains() async {
     if (isFirebaseAvailable) {
-      print('Retrying fountain loading...');
       await _loadFountains();
-    } else {
-      print('Firebase not available, cannot load fountains');
     }
   }
 
@@ -51,8 +46,6 @@ class FountainProvider extends ChangeNotifier {
     // Only load fountains if Firebase is available
     if (isFirebaseAvailable) {
       _loadFountains();
-    } else {
-      print('Firebase not available in FountainProvider, skipping fountain load');
     }
   }
 
@@ -72,7 +65,9 @@ class FountainProvider extends ChangeNotifier {
           .map((doc) => Fountain.fromFirestore(doc))
           .toList();
 
-      _applyFiltersAndSearch();
+      // Initialize filtered fountains with all fountains
+      _filteredFountains = List.from(_fountains);
+      notifyListeners();
       _setLoading(false);
     } catch (e) {
       _setError('Failed to load fountains: $e');
@@ -86,28 +81,16 @@ class FountainProvider extends ChangeNotifier {
       _setLoading(true);
       _clearError();
 
-      // First, get the total count to show progress
-      final countSnapshot = await _firestore
-          .collection('fountains')
-          .where('status', isEqualTo: 'active')
-          .count()
-          .get();
-      
-      final totalCount = countSnapshot.count;
-      print('Total fountains in database: $totalCount');
-
-      // Load fountains in larger batches for better performance
       final querySnapshot = await _firestore
           .collection('fountains')
           .where('status', isEqualTo: 'active')
-          .limit(5000) // Increased limit to show more fountains
+          .orderBy('addedDate', descending: true)
           .get();
 
       final allFountains = querySnapshot.docs
           .map((doc) => Fountain.fromFirestore(doc))
           .toList();
 
-      print('Loaded ${allFountains.length} fountains (showing up to 5000)');
       _setLoading(false);
       return allFountains;
     } catch (e) {
@@ -117,197 +100,135 @@ class FountainProvider extends ChangeNotifier {
     }
   }
 
-  // Load fountains with pagination for better performance
-  Future<List<Fountain>> getFountainsWithPagination({
-    int limit = 1000,
-    DocumentSnapshot? lastDocument,
-    String? importSource,
-  }) async {
-    try {
-      _setLoading(true);
-      _clearError();
-
-      Query query = _firestore
-          .collection('fountains')
-          .where('status', isEqualTo: 'active')
-          .limit(limit);
-
-      // Filter by import source if specified
-      if (importSource != null) {
-        query = query.where('importSource', isEqualTo: importSource);
-      }
-
-      // Start after last document for pagination
-      if (lastDocument != null) {
-        query = query.startAfterDocument(lastDocument);
-      }
-
-      final querySnapshot = await query.get();
-      
-      final fountains = querySnapshot.docs
-          .map((doc) => Fountain.fromFirestore(doc))
-          .toList();
-
-      _setLoading(false);
-      return fountains;
-    } catch (e) {
-      _setError('Failed to load fountains with pagination: $e');
-      _setLoading(false);
-      return [];
-    }
-  }
-
-  // Get fountain count for progress display
-  Future<int> getFountainCount({String? importSource}) async {
-    try {
-      Query query = _firestore
-          .collection('fountains')
-          .where('status', isEqualTo: 'active');
-
-      if (importSource != null) {
-        query = query.where('importSource', isEqualTo: importSource);
-      }
-
-      final countSnapshot = await query.count().get();
-      return countSnapshot.count ?? 0;
-    } catch (e) {
-      print('Failed to get fountain count: $e');
-      return 0;
-    }
-  }
-
-  // Load fountains in viewport - simplified version
+  // Get fountains in a specific viewport using geohash
   Future<List<Fountain>> getFountainsInViewport({
     required double northLat,
     required double southLat,
     required double eastLon,
     required double westLon,
-    required double zoomLevel,
-    String? importSource,
+    double? zoomLevel,
   }) async {
     try {
-      _setLoading(true);
-      _clearError();
+      print('🔍 getFountainsInViewport called with bounds: N:$northLat, S:$southLat, E:$eastLon, W:$westLon, zoom:$zoomLevel');
+      
+      final precision = zoomLevel != null
+          ? GeohashUtils.getOptimalPrecision(zoomLevel)
+          : 5; // Default to 5-character precision (~1.2km)
 
-      print('Loading fountains in viewport:');
-      print('Latitude range: $southLat to $northLat');
-      print('Longitude range: $westLon to $eastLon');
-      print('Zoom level: $zoomLevel');
+      print('📍 Using precision: $precision');
 
-      // Use a simpler query approach that doesn't require complex indexes
-      Query query = _firestore
-          .collection('fountains')
-          .limit(1000); // Reasonable limit for testing
+      final geohashPrefixes = GeohashUtils.getViewportGeohashes(
+        northLat: northLat,
+        southLat: southLat,
+        eastLon: eastLon,
+        westLon: westLon,
+        precision: precision,
+      );
 
-      if (importSource != null) {
-        query = query.where('importSource', isEqualTo: importSource);
+      print('🗺️ Generated ${geohashPrefixes.length} geohash prefixes: ${geohashPrefixes.take(5).join(', ')}...');
+
+      if (geohashPrefixes.isEmpty) {
+        print('❌ No geohash prefixes generated');
+        return [];
       }
 
-      final querySnapshot = await query.get();
-      print('Raw query returned ${querySnapshot.docs.length} documents');
+      final allResults = <Fountain>[];
+      final Set<String> seenIds = {};
 
-      // Filter fountains in memory based on viewport bounds
-      final fountains = <Fountain>[];
-      int totalChecked = 0;
-      int inLatRange = 0;
-      int inLonRange = 0;
-      int activeStatus = 0;
-      
-      for (final doc in querySnapshot.docs) {
+      for (final geohashPrefix in geohashPrefixes) {
         try {
-          totalChecked++;
-          final fountain = Fountain.fromFirestore(doc);
+          String geohashField;
+          switch (precision) {
+            case 1:
+            case 2:
+            case 3:
+              geohashField = 'geohash3';
+              break;
+            case 4:
+              geohashField = 'geohash4';
+              break;
+            default:
+              geohashField = 'geohash'; // Fixed: Python script created 'geohash', not 'geohash5'
+          }
+
+          print('🔍 Querying for geohash prefix: $geohashPrefix using field: $geohashField');
+
+          final querySnapshot = await _firestore
+              .collection('fountains')
+              .where('status', isEqualTo: 'active')
+              .where(geohashField, isEqualTo: geohashPrefix)
+              .get();
+
+          print('📊 Query returned ${querySnapshot.docs.length} documents for prefix $geohashPrefix');
           
-          // Check if fountain is within viewport bounds
-          bool inLat = fountain.location.latitude >= southLat && fountain.location.latitude <= northLat;
-          bool inLon = fountain.location.longitude >= westLon && fountain.location.longitude <= eastLon;
-          
-          if (inLat) inLatRange++;
-          if (inLon) inLonRange++;
-          if (fountain.status == FountainStatus.active) activeStatus++;
-          
-          if (inLat && inLon && fountain.status == FountainStatus.active) {
-            fountains.add(fountain);
+          // Debug: Show the actual query being made
+          print('🔍 Query details: status=active AND $geohashField=$geohashPrefix');
+
+          for (final doc in querySnapshot.docs) {
+            final fountain = Fountain.fromFirestore(doc);
+            if (!seenIds.contains(fountain.id)) {
+              seenIds.add(fountain.id);
+              allResults.add(fountain);
+            }
           }
         } catch (e) {
-          print('Error parsing fountain document: $e');
+          print('❌ Error querying prefix $geohashPrefix: $e');
+          continue;
         }
       }
 
-      print('Found ${fountains.length} fountains in viewport (${totalChecked} checked)');
-      
-      _setLoading(false);
-      return fountains;
+      print('📈 Total unique fountains found: ${allResults.length}');
 
+      final centerLat = (northLat + southLat) / 2;
+      final centerLon = (eastLon + westLon) / 2;
+
+      allResults.sort((a, b) {
+        final distA = _calculateDistance(
+          centerLat, centerLon,
+          a.location.latitude, a.location.longitude,
+        );
+        final distB = _calculateDistance(
+          centerLat, centerLon,
+          b.location.latitude, b.location.longitude,
+        );
+        return distA.compareTo(distB);
+      });
+
+      final limit = _calculateOptimalLimit(zoomLevel ?? 10);
+      final finalResult = allResults.take(limit).toList();
+
+      print('🎯 Final result: ${finalResult.length} fountains (limited to $limit)');
+      return finalResult;
     } catch (e) {
-      print('Error in getFountainsInViewport: $e');
-      _setLoading(false);
-      _setError('Failed to load fountains: $e');
+      print('❌ Error in getFountainsInViewport: $e');
+      _setError('Failed to load fountains in viewport: $e');
       return [];
     }
   }
 
-  // Load fountains by region (much more efficient than loading all)
+  // Get fountains in a specific region
   Future<List<Fountain>> getFountainsByRegion({
-    required double centerLat,
-    required double centerLon,
-    required double radiusKm,
-    String? importSource,
-    int limit = 2000,
+    required double northLat,
+    required double southLat,
+    required double eastLon,
+    required double westLon,
+    int limit = 100,
   }) async {
     try {
       _setLoading(true);
       _clearError();
 
-      // Calculate bounding box for the region
-      final latDelta = radiusKm / 111.0; // 1 degree = ~111 km
-      final lonDelta = radiusKm / (111.0 * cos(centerLat * pi / 180));
-
-      Query query = _firestore
-          .collection('fountains')
-          .where('status', isEqualTo: 'active')
-          .where('location.latitude', isGreaterThanOrEqualTo: centerLat - latDelta)
-          .where('location.latitude', isLessThanOrEqualTo: centerLat + latDelta)
-          .limit(limit);
-
-      if (importSource != null) {
-        query = query.where('importSource', isEqualTo: importSource);
-      }
-
-      final querySnapshot = await query.get();
-      
-      // Filter by longitude and calculate actual distances
-      final regionFountains = querySnapshot.docs
-          .map((doc) => Fountain.fromFirestore(doc))
-          .where((fountain) {
-        final distance = _calculateDistance(
-          centerLat,
-          centerLon,
-          fountain.location.latitude,
-          fountain.location.longitude,
-        );
-        return distance <= radiusKm;
-      }).toList();
-
-      // Sort by distance
-      regionFountains.sort((a, b) {
-        final distanceA = _calculateDistance(
-          centerLat,
-          centerLon,
-          a.location.latitude,
-          a.location.longitude,
-        );
-        final distanceB = _calculateDistance(
-          centerLat,
-          centerLon,
-          b.location.latitude,
-          b.location.longitude,
-        );
-        return distanceA.compareTo(distanceB);
-      });
+      // Use the same geohash-based approach for consistency
+      final fountains = await getFountainsInViewport(
+        northLat: northLat,
+        southLat: southLat,
+        eastLon: eastLon,
+        westLon: westLon,
+        zoomLevel: 10, // Medium zoom for region queries
+      );
 
       _setLoading(false);
-      return regionFountains;
+      return fountains.take(limit).toList();
     } catch (e) {
       _setError('Failed to load fountains by region: $e');
       _setLoading(false);
@@ -315,474 +236,55 @@ class FountainProvider extends ChangeNotifier {
     }
   }
 
-  // Load fountains near a specific location
-  Future<List<Fountain>> loadFountainsNearLocation(
-    double latitude,
-    double longitude,
-    double radiusKm,
-  ) async {
+  // Get fountains near a specific location
+  Future<List<Fountain>> loadFountainsNearLocation({
+    required double latitude,
+    required double longitude,
+    double radiusKm = 5.0,
+    int limit = 50,
+  }) async {
     try {
       _setLoading(true);
       _clearError();
 
-      // Calculate bounding box for the search radius
-      final latDelta = radiusKm / 111.0; // 1 degree = ~111 km
-      final lonDelta = radiusKm / (111.0 * cos(latitude * pi / 180));
+      // Calculate bounding box for the radius
+      final latDelta = radiusKm / 111.0; // Approximate km per degree latitude
+      final lonDelta = radiusKm / (111.0 * cos(latitude * pi / 180.0)); // Adjust for longitude
 
-      final querySnapshot = await _firestore
-          .collection('fountains')
-          .where('status', isEqualTo: 'active')
-          .where('location.latitude', isGreaterThanOrEqualTo: latitude - latDelta)
-          .where('location.latitude', isLessThanOrEqualTo: latitude + latDelta)
-          .get();
+      final northLat = latitude + latDelta;
+      final southLat = latitude - latDelta;
+      final eastLon = longitude + lonDelta;
+      final westLon = longitude - lonDelta;
 
-      // Filter by longitude and calculate actual distances
-      final nearbyFountains = querySnapshot.docs
-          .map((doc) => Fountain.fromFirestore(doc))
-          .where((fountain) {
-        final distance = _calculateDistance(
-          latitude,
-          longitude,
-          fountain.location.latitude,
-          fountain.location.longitude,
-        );
-        return distance <= radiusKm;
-      }).toList();
-
-      // Sort by distance
-      nearbyFountains.sort((a, b) {
-        final distanceA = _calculateDistance(
-          latitude,
-          longitude,
-          a.location.latitude,
-          a.location.longitude,
-        );
-        final distanceB = _calculateDistance(
-          latitude,
-          longitude,
-          b.location.latitude,
-          b.location.longitude,
-        );
-        return distanceA.compareTo(distanceB);
-      });
+      // Use the same geohash-based approach
+      final fountains = await getFountainsInViewport(
+        northLat: northLat,
+        southLat: southLat,
+        eastLon: eastLon,
+        westLon: westLon,
+        zoomLevel: 14, // High zoom for nearby queries
+      );
 
       _setLoading(false);
-      return nearbyFountains;
+      return fountains.take(limit).toList();
     } catch (e) {
-      _setError('Failed to load nearby fountains: $e');
+      _setError('Failed to load fountains near location: $e');
       _setLoading(false);
       return [];
     }
   }
 
-  // Add a new fountain
-  Future<bool> addFountain(Fountain fountain, AuthProvider authProvider) async {
-    try {
-      print('Starting addFountain...');
-      _setLoading(true);
-      _clearError();
-
-      // Check if Firebase is available
-      if (!isFirebaseAvailable) {
-        _setError('Firebase not properly configured');
-        _setLoading(false);
-        return false;
-      }
-
-      final currentUser = authProvider.currentUser;
-      if (currentUser == null) {
-        _setError('User not authenticated');
-        _setLoading(false);
-        return false;
-      }
-      print('User authenticated: ${currentUser.uid}');
-
-      // Prepare and log payload
-      print('Preparing payload...');
-      final payload = fountain.toFirestore();
-      print('Payload: ' + payload.toString());
-
-      // Test if Firestore database exists and is accessible
-      print('Testing Firestore database existence...');
-      try {
-        // Try to access a system collection to check if database exists
-        final dbInfo = await _firestore.app.options;
-        print('Firestore database exists and is accessible');
-        print('Project ID: ${dbInfo.projectId}');
-        print('Database URL: ${dbInfo.databaseURL}');
-      } catch (e) {
-        print('Firestore database test failed: $e');
-        _setError('Firestore database not accessible: $e');
-        _setLoading(false);
-        return false;
-      }
-
-      // Simple connectivity test
-      print('Testing Firestore connectivity...');
-      try {
-        final testSnapshot = await _firestore.collection('fountains').limit(1).get();
-        print('Firestore connectivity test passed - found ${testSnapshot.docs.length} documents');
-      } catch (e) {
-        print('Firestore connectivity test failed: $e');
-        _setError('Firestore connectivity test failed: $e');
-        _setLoading(false);
-        return false;
-      }
-
-      print('Adding fountain to Firestore...');
-      DocumentReference<Map<String, dynamic>> docRef;
-      try {
-        print('Starting Firestore add operation...');
-        final startTime = DateTime.now();
-        
-        // Add timeout to prevent hanging
-        docRef = await _firestore.collection('fountains').add(payload).timeout(
-          const Duration(seconds: 10),
-          onTimeout: () {
-            final elapsed = DateTime.now().difference(startTime);
-            print('Firestore operation timed out after ${elapsed.inMilliseconds}ms');
-            throw Exception('Firestore operation timed out after 10 seconds');
-          },
-        );
-        
-        final elapsed = DateTime.now().difference(startTime);
-        print('Fountain added to Firestore with ID: ${docRef.id} in ${elapsed.inMilliseconds}ms');
-      } on FirebaseException catch (fe) {
-        print('FirebaseException adding fountain: ' + fe.code + ' - ' + (fe.message ?? '')); 
-        _setError('Firebase error: ${fe.code} - ${fe.message}');
-        _setLoading(false);
-        return false;
-      } catch (e, st) {
-        print('Unknown error adding fountain: ' + e.toString());
-        print(st);
-        _setError('Failed to add fountain: $e');
-        _setLoading(false);
-        return false;
-      }
-      
-      // Update the fountain with the generated ID
-      final newFountain = fountain.copyWith(id: docRef.id);
-      _fountains.insert(0, newFountain);
-      
-      print('Updating user contribution...');
-      try {
-        // Update user contribution
-        await _updateUserContribution(currentUser.uid, docRef.id);
-        print('User contribution updated');
-      } catch (e) {
-        print('Warning: Failed to update user contribution: $e');
-        // Don't fail the entire operation for this
-      }
-      
-      print('Refreshing user data...');
-      try {
-        // Refresh user data in AuthProvider
-        await authProvider.refreshUserData();
-        print('User data refreshed');
-      } catch (e) {
-        print('Warning: Failed to refresh user data: $e');
-        // Don't fail the entire operation for this
-      }
-      
-      _applyFiltersAndSearch();
-      _setLoading(false);
-      print('addFountain completed successfully');
-      return true;
-    } catch (e) {
-      print('Error in addFountain: $e');
-      _setError('Failed to add fountain: $e');
-      _setLoading(false);
-      return false;
-    }
-  }
-
-  // Update an existing fountain
-  Future<bool> updateFountain(Fountain fountain) async {
-    try {
-      _setLoading(true);
-      _clearError();
-
-      await _firestore.collection('fountains').doc(fountain.id).update(fountain.toFirestore());
-      
-      final index = _fountains.indexWhere((f) => f.id == fountain.id);
-      if (index != -1) {
-        _fountains[index] = fountain;
-        _applyFiltersAndSearch();
-      }
-      
-      _setLoading(false);
-      return true;
-    } catch (e) {
-      _setError('Failed to update fountain: $e');
-      _setLoading(false);
-      return false;
-    }
-  }
-
-  // Delete a fountain
-  Future<bool> deleteFountain(String fountainId) async {
-    try {
-      _setLoading(true);
-      _clearError();
-
-      await _firestore.collection('fountains').doc(fountainId).delete();
-      
-      _fountains.removeWhere((f) => f.id == fountainId);
-      _applyFiltersAndSearch();
-      
-      _setLoading(false);
-      return true;
-    } catch (e) {
-      _setError('Failed to delete fountain: $e');
-      _setLoading(false);
-      return false;
-    }
-  }
-
-  // Validate a fountain
-  Future<bool> validateFountain(String fountainId, bool isValid, String? comment, AuthProvider authProvider) async {
-    try {
-      _setLoading(true);
-      _clearError();
-
-      final currentUser = authProvider.currentUser;
-      if (currentUser == null) {
-        _setError('User not authenticated');
-        _setLoading(false);
-        return false;
-      }
-
-      final validation = Validation(
-        userId: currentUser.uid,
-        timestamp: DateTime.now(),
-        isValid: isValid,
-        comment: comment,
-      );
-
-      // Update fountain with validation
-      await _firestore.collection('fountains').doc(fountainId).update({
-        'validations': FieldValue.arrayUnion([validation.toMap()]),
-      });
-
-      // Update user document with validation
-      await _updateUserValidation(currentUser.uid, fountainId);
-
-      // Update local data
-      final index = _fountains.indexWhere((f) => f.id == fountainId);
-      if (index != -1) {
-        final fountain = _fountains[index];
-        final updatedValidations = [...fountain.validations, validation];
-        _fountains[index] = fountain.copyWith(validations: updatedValidations);
-        _applyFiltersAndSearch();
-      }
-
-      _setLoading(false);
-      return true;
-    } catch (e) {
-      _setError('Failed to validate fountain: $e');
-      _setLoading(false);
-      return false;
-    }
-  }
-
-  // Toggle favorite for a fountain
-  Future<bool> toggleFavorite(String fountainId, AuthProvider authProvider) async {
-    try {
-      _setLoading(true);
-      _clearError();
-
-      final currentUser = authProvider.currentUser;
-      if (currentUser == null) {
-        _setError('User not authenticated');
-        _setLoading(false);
-        return false;
-      }
-
-      final userDoc = await _firestore.collection('users').doc(currentUser.uid).get();
-      if (!userDoc.exists) {
-        _setError('User document not found');
-        _setLoading(false);
-        return false;
-      }
-
-      final userData = userDoc.data() as Map<String, dynamic>;
-      final favoriteFountainIds = List<String>.from(userData['favoriteFountainIds'] ?? []);
-      
-      bool isFavorite = favoriteFountainIds.contains(fountainId);
-      
-      if (isFavorite) {
-        // Remove from favorites
-        favoriteFountainIds.remove(fountainId);
-        await _firestore.collection('users').doc(currentUser.uid).update({
-          'favoriteFountainIds': favoriteFountainIds,
-        });
-      } else {
-        // Add to favorites
-        favoriteFountainIds.add(fountainId);
-        await _firestore.collection('users').doc(currentUser.uid).update({
-          'favoriteFountainIds': favoriteFountainIds,
-        });
-      }
-
-      // Refresh user data in AuthProvider
-      await authProvider.refreshUserData();
-
-      _setLoading(false);
-      return true;
-    } catch (e) {
-      _setError('Failed to toggle favorite: $e');
-      _setLoading(false);
-      return false;
-    }
-  }
-
-  // Update user contribution when adding a fountain
-  Future<void> _updateUserContribution(String userId, String fountainId) async {
-    try {
-      print('Updating user contribution for user: $userId, fountain: $fountainId');
-      await _firestore.collection('users').doc(userId).update({
-        'contributedFountainIds': FieldValue.arrayUnion([fountainId]),
-        'contributionScore': FieldValue.increment(10),
-      });
-      print('User contribution updated successfully');
-    } catch (e) {
-      print('Failed to update user contribution: $e');
-    }
-  }
-
-  // Update user validation
-  Future<void> _updateUserValidation(String userId, String fountainId) async {
-    try {
-      await _firestore.collection('users').doc(userId).update({
-        'validatedFountainIds': FieldValue.arrayUnion([fountainId]),
-        'contributionScore': FieldValue.increment(5),
-      });
-    } catch (e) {
-      print('Failed to update user validation: $e');
-    }
-  }
-
-  // Search fountains
-  void searchFountains(String query) {
-    _searchQuery = query;
-    _applyFiltersAndSearch();
-  }
-
-  // Apply filters
-  void applyFilters(Map<String, dynamic> filters) {
-    _filters = filters;
-    _applyFiltersAndSearch();
-  }
-
-  // Clear filters
-  void clearFilters() {
-    _filters.clear();
-    _applyFiltersAndSearch();
-  }
-
-  // Apply filters and search
-  void _applyFiltersAndSearch() {
-    _filteredFountains = _fountains.where((fountain) {
-      // Apply search query
-      if (_searchQuery.isNotEmpty) {
-        final query = _searchQuery.toLowerCase();
-        if (!fountain.name.toLowerCase().contains(query) &&
-            !fountain.description.toLowerCase().contains(query)) {
-          return false;
-        }
-      }
-
-      // Apply filters
-      for (final entry in _filters.entries) {
-        switch (entry.key) {
-          case 'type':
-            if (fountain.type.name != entry.value) return false;
-            break;
-          case 'status':
-            if (fountain.status.name != entry.value) return false;
-            break;
-          case 'waterQuality':
-            if (fountain.waterQuality.name != entry.value) return false;
-            break;
-          case 'accessibility':
-            if (fountain.accessibility.name != entry.value) return false;
-            break;
-          case 'tags':
-            final tags = entry.value as List<String>;
-            if (!tags.any((tag) => fountain.tags.contains(tag))) return false;
-            break;
-          case 'minRating':
-            if (fountain.rating == null || fountain.rating! < entry.value) return false;
-            break;
-        }
-      }
-
-      return true;
-    }).toList();
-
-    notifyListeners();
-  }
-
-  // Set selected fountain
-  void selectFountain(Fountain? fountain) {
-    _selectedFountain = fountain;
-    notifyListeners();
-  }
-
-  // Get fountain by ID
-  Fountain? getFountainById(String id) {
-    try {
-      return _fountains.firstWhere((f) => f.id == id);
-    } catch (e) {
-      return null;
-    }
-  }
-
-  // Get fountains by user
-  List<Fountain> getFountainsByUser(String userId) {
-    return _fountains.where((f) => f.addedBy == userId).toList();
-  }
-
-  // Get favorite fountains for user
-  List<Fountain> getFavoriteFountains(UserModel user) {
-    return _fountains.where((f) => user.hasFavorited(f.id)).toList();
-  }
-
-  // Check if a fountain is favorited by current user
-  bool isFavoritedByCurrentUser(String fountainId, AuthProvider authProvider) {
-    final user = authProvider.userModel;
-    return user?.hasFavorited(fountainId) ?? false;
-  }
-
-  // Get user's contributed fountains
-  List<Fountain> getUserContributions(UserModel user) {
-    return _fountains.where((f) => user.hasContributed(f.id)).toList();
-  }
-
-  // Get user's validated fountains
-  List<Fountain> getUserValidations(UserModel user) {
-    return _fountains.where((f) => user.hasValidated(f.id)).toList();
-  }
-
-  // Get user statistics
-  Map<String, dynamic> getUserStats(UserModel user) {
-    final contributions = getUserContributions(user);
-    final validations = getUserValidations(user);
-    final favorites = getFavoriteFountains(user);
-
-    return {
-      'totalContributions': contributions.length,
-      'totalValidations': validations.length,
-      'totalFavorites': favorites.length,
-      'contributionScore': user.contributionScore,
-      'contributionLevel': user.contributionLevel,
-    };
-  }
-
-  // Refresh all data from database
-  Future<void> refreshData() async {
-    await _loadFountains();
-    notifyListeners();
+  // Calculate optimal limit based on zoom level
+  int _calculateOptimalLimit(double? zoomLevel) {
+    if (zoomLevel == null) return 100;
+    
+    if (zoomLevel >= 18) return 200;      // Street level: more detail
+    if (zoomLevel >= 16) return 150;      // Building level
+    if (zoomLevel >= 14) return 100;      // Street level
+    if (zoomLevel >= 12) return 75;       // City level
+    if (zoomLevel >= 10) return 50;       // Region level
+    if (zoomLevel >= 8) return 25;        // Country level
+    return 10;                            // Continent level: fewer results
   }
 
   // Calculate distance between two points using Haversine formula
@@ -796,15 +298,424 @@ class FountainProvider extends ChangeNotifier {
         cos(_degreesToRadians(lat1)) * cos(_degreesToRadians(lat2)) *
         sin(dLon / 2) * sin(dLon / 2);
     
-    final c = 2 * atan2(sqrt(a), sqrt(1 - a));
+    final c = 2 * atan(sqrt(a) / sqrt(1 - a));
     
     return earthRadius * c;
   }
 
-  double _degreesToRadians(double degrees) {
-    return degrees * (pi / 180);
+  static double _degreesToRadians(double degrees) {
+    return degrees * (pi / 180.0);
   }
 
+  // Update fountains with geohash fields (for existing data)
+  Future<void> updateFountainsWithGeohash() async {
+    try {
+      _setLoading(true);
+      _clearError();
+
+      // Get all fountains that don't have geohash fields
+      final querySnapshot = await _firestore
+          .collection('fountains')
+          .where('geohash', isNull: true)
+          .limit(500) // Process in batches
+          .get();
+
+      if (querySnapshot.docs.isEmpty) {
+        _setLoading(false);
+        return;
+      }
+
+      final batch = _firestore.batch();
+      int updatedCount = 0;
+
+      for (final doc in querySnapshot.docs) {
+        final fountain = Fountain.fromFirestore(doc);
+        
+        // Calculate geohash fields
+        final geohash = GeohashUtils.encode(
+          fountain.location.latitude,
+          fountain.location.longitude,
+          precision: 5,
+        );
+        final geohash4 = GeohashUtils.encode(
+          fountain.location.latitude,
+          fountain.location.longitude,
+          precision: 4,
+        );
+        final geohash3 = GeohashUtils.encode(
+          fountain.location.latitude,
+          fountain.location.longitude,
+          precision: 3,
+        );
+
+        // Update the document
+        batch.update(doc.reference, {
+          'geohash': geohash,
+          'geohash4': geohash4,
+          'geohash3': geohash3,
+        });
+
+        updatedCount++;
+      }
+
+      // Commit the batch
+      await batch.commit();
+
+      _setLoading(false);
+    } catch (e) {
+      _setError('Failed to update fountains with geohash: $e');
+      _setLoading(false);
+    }
+  }
+
+  // Search fountains by query
+  Future<void> searchFountains(String query) async {
+    _searchQuery = query;
+    _applyFiltersAndSearch();
+  }
+
+  // Apply filters to fountains
+  Future<void> applyFilters(Map<String, dynamic> filters) async {
+    _filters = filters;
+    _applyFiltersAndSearch();
+  }
+
+  // Clear all filters
+  Future<void> clearFilters() async {
+    _filters.clear();
+    _applyFiltersAndSearch();
+  }
+
+  // Apply filters and search
+  void _applyFiltersAndSearch() {
+    _filteredFountains = List.from(_fountains);
+
+    // Apply search query
+    if (_searchQuery.isNotEmpty) {
+      _filteredFountains = _filteredFountains.where((fountain) {
+        final query = _searchQuery.toLowerCase();
+        return fountain.name.toLowerCase().contains(query) ||
+               fountain.description.toLowerCase().contains(query) ||
+               fountain.tags.any((tag) => tag.toLowerCase().contains(query));
+      }).toList();
+    }
+
+    // Apply filters
+    if (_filters.isNotEmpty) {
+      _filteredFountains = _filteredFountains.where((fountain) {
+        for (final entry in _filters.entries) {
+          final key = entry.key;
+          final value = entry.value;
+
+          switch (key) {
+            case 'status':
+              if (fountain.status != value) return false;
+              break;
+            case 'type':
+              if (fountain.type != value) return false;
+              break;
+            case 'waterQuality':
+              if (fountain.waterQuality != value) return false;
+              break;
+            case 'accessibility':
+              if (fountain.accessibility != value) return false;
+              break;
+          }
+        }
+        return true;
+      }).toList();
+    }
+
+    notifyListeners();
+  }
+
+  // Get fountain by ID
+  Future<Fountain?> getFountainById(String id) async {
+    try {
+      final doc = await _firestore.collection('fountains').doc(id).get();
+      if (doc.exists) {
+        return Fountain.fromFirestore(doc);
+      }
+      return null;
+    } catch (e) {
+      _setError('Failed to get fountain: $e');
+      return null;
+    }
+  }
+
+  // Add new fountain
+  Future<bool> addFountain(Fountain fountain, AuthProvider authProvider) async {
+    try {
+      _setLoading(true);
+      _clearError();
+
+      // Calculate geohash fields
+      final geohash = GeohashUtils.encode(
+        fountain.location.latitude,
+        fountain.location.longitude,
+        precision: 5,
+      );
+      final geohash4 = GeohashUtils.encode(
+        fountain.location.latitude,
+        fountain.location.longitude,
+        precision: 4,
+      );
+      final geohash3 = GeohashUtils.encode(
+        fountain.location.latitude,
+        fountain.location.longitude,
+        precision: 3,
+      );
+
+      // Add geohash fields to fountain data
+      final fountainData = fountain.toFirestore();
+      fountainData['geohash'] = geohash;
+      fountainData['geohash4'] = geohash4;
+      fountainData['geohash3'] = geohash3;
+
+      await _firestore.collection('fountains').add(fountainData);
+
+      // Reload fountains
+      await _loadFountains();
+
+      _setLoading(false);
+      return true;
+    } catch (e) {
+      _setError('Failed to add fountain: $e');
+      _setLoading(false);
+      return false;
+    }
+  }
+
+  // Update existing fountain
+  Future<bool> updateFountain(Fountain fountain) async {
+    try {
+      _setLoading(true);
+      _clearError();
+
+      // Recalculate geohash fields if location changed
+      final geohash = GeohashUtils.encode(
+        fountain.location.latitude,
+        fountain.location.longitude,
+        precision: 5,
+      );
+      final geohash4 = GeohashUtils.encode(
+        fountain.location.latitude,
+        fountain.location.longitude,
+        precision: 4,
+      );
+      final geohash3 = GeohashUtils.encode(
+        fountain.location.latitude,
+        fountain.location.longitude,
+        precision: 3,
+      );
+
+      // Add geohash fields to fountain data
+      final fountainData = fountain.toFirestore();
+      fountainData['geohash'] = geohash;
+      fountainData['geohash4'] = geohash4;
+      fountainData['geohash3'] = geohash3;
+
+      await _firestore.collection('fountains').doc(fountain.id).update(fountainData);
+
+      // Reload fountains
+      await _loadFountains();
+
+      _setLoading(false);
+      return true;
+    } catch (e) {
+      _setError('Failed to update fountain: $e');
+      _setLoading(false);
+      return false;
+    }
+  }
+
+  // Delete fountain
+  Future<bool> deleteFountain(String id) async {
+    try {
+      _setLoading(true);
+      _clearError();
+
+      await _firestore.collection('fountains').doc(id).delete();
+
+      // Reload fountains
+      await _loadFountains();
+
+      _setLoading(false);
+      return true;
+    } catch (e) {
+      _setError('Failed to delete fountain: $e');
+      _setLoading(false);
+      return false;
+    }
+  }
+
+  // Set selected fountain
+  void selectFountain(Fountain fountain) {
+    _selectedFountain = fountain;
+    notifyListeners();
+  }
+
+  // Clear selected fountain
+  void clearSelectedFountain() {
+    _selectedFountain = null;
+    notifyListeners();
+  }
+
+  // Add missing methods that are referenced in other files
+  Future<void> refresh() async {
+    await _loadFountains();
+  }
+
+  Future<void> refreshData() async {
+    await _loadFountains();
+  }
+
+  // Debug method to check what's in the database
+  Future<void> debugCheckDatabase() async {
+    try {
+      print('🔍 DEBUG: Checking database contents...');
+      
+      // Check total count of all fountains
+      final totalQuery = await _firestore
+          .collection('fountains')
+          .get();
+      
+      print('📊 TOTAL fountains in database: ${totalQuery.docs.length}');
+      
+      // Check count of active fountains
+      final activeQuery = await _firestore
+          .collection('fountains')
+          .where('status', isEqualTo: 'active')
+          .get();
+      
+      print('✅ ACTIVE fountains: ${activeQuery.docs.length}');
+      
+      // Check count of fountains with geohash fields
+      final geohash3Query = await _firestore
+          .collection('fountains')
+          .where('geohash3', isNull: false)
+          .get();
+      
+      print('🔍 Fountains with geohash3 field: ${geohash3Query.docs.length}');
+      
+      final geohash4Query = await _firestore
+          .collection('fountains')
+          .where('geohash4', isNull: false)
+          .get();
+      
+      print('🔍 Fountains with geohash4 field: ${geohash4Query.docs.length}');
+      
+      final geohash5Query = await _firestore
+          .collection('fountains')
+          .where('geohash', isNull: false)
+          .get();
+      
+      print('🔍 Fountains with geohash field: ${geohash5Query.docs.length}');
+      
+      // Check a few random fountains to see what fields they have
+      final sampleQuery = await _firestore
+          .collection('fountains')
+          .where('status', isEqualTo: 'active')
+          .limit(5)
+          .get();
+      
+      print('📄 Sample fountains:');
+      
+      for (final doc in sampleQuery.docs) {
+        final data = doc.data();
+        final location = data['location'] as GeoPoint;
+        print('📄 Fountain ${doc.id}:');
+        print('   - name: ${data['name']}');
+        print('   - location: lat:${location.latitude}, lon:${location.longitude}');
+        print('   - geohash: ${data['geohash']}');
+        print('   - geohash4: ${data['geohash4']}');
+        print('   - geohash3: ${data['geohash3']}');
+        print('   - status: ${data['status']}');
+        print('   - importSource: ${data['importSource']}');
+        print('   ---');
+      }
+      
+      // Check if there are fountains without geohash fields
+      final noGeohashQuery = await _firestore
+          .collection('fountains')
+          .where('geohash3', isNull: true)
+          .limit(3)
+          .get();
+      
+      if (noGeohashQuery.docs.isNotEmpty) {
+        print('⚠️ Found fountains WITHOUT geohash fields:');
+        for (final doc in noGeohashQuery.docs) {
+          final data = doc.data();
+          print('   - ${doc.id}: ${data['name']} at ${data['location']}');
+        }
+      }
+      
+      // Test a specific geohash query to see if it works
+      print('🧪 Testing specific geohash query...');
+      try {
+        final testQuery = await _firestore
+            .collection('fountains')
+            .where('status', isEqualTo: 'active')
+            .where('geohash3', isEqualTo: 'sr7')
+            .limit(1)
+            .get();
+        
+        print('✅ Test query for geohash3=sr7 returned: ${testQuery.docs.length} results');
+        if (testQuery.docs.isNotEmpty) {
+          final testDoc = testQuery.docs.first;
+          final testData = testDoc.data();
+          print('   Found: ${testData['name']} at ${testData['location']}');
+        }
+      } catch (e) {
+        print('❌ Test query for geohash3=sr7 failed: $e');
+      }
+      
+      // Test alternative field names
+      print('🧪 Testing alternative field names...');
+      try {
+        final testQuery2 = await _firestore
+            .collection('fountains')
+            .where('status', isEqualTo: 'active')
+            .where('geohash', isEqualTo: 'sr7bh')
+            .limit(1)
+            .get();
+        
+        print('✅ Test query for geohash=sr7bh returned: ${testQuery2.docs.length} results');
+        if (testQuery2.docs.isNotEmpty) {
+          final testDoc = testQuery2.docs.first;
+          final testData = testDoc.data();
+          print('   Found: ${testData['name']} at ${testData['location']}');
+        }
+      } catch (e) {
+        print('❌ Test query for geohash=sr7bh failed: $e');
+      }
+      
+      // Test a simple query without geohash to see if basic queries work
+      print('🧪 Testing basic query without geohash...');
+      try {
+        final basicQuery = await _firestore
+            .collection('fountains')
+            .where('status', isEqualTo: 'active')
+            .limit(1)
+            .get();
+        
+        print('✅ Basic query returned: ${basicQuery.docs.length} results');
+        if (basicQuery.docs.isNotEmpty) {
+          final testDoc = basicQuery.docs.first;
+          final testData = testDoc.data();
+          print('   Found: ${testData['name']} at ${testData['location']}');
+          print('   All fields: ${testData.keys.toList()}');
+        }
+      } catch (e) {
+        print('❌ Basic query failed: $e');
+      }
+      
+    } catch (e) {
+      print('❌ Error checking database: $e');
+    }
+  }
+
+  // Private helper methods
   void _setLoading(bool loading) {
     _isLoading = loading;
     notifyListeners();
@@ -818,14 +729,5 @@ class FountainProvider extends ChangeNotifier {
   void _clearError() {
     _error = null;
     notifyListeners();
-  }
-
-  void clearError() {
-    _clearError();
-  }
-
-  // Refresh data
-  Future<void> refresh() async {
-    await _loadFountains();
   }
 }

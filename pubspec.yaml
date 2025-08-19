@@ -44,6 +44,7 @@ dependencies:
   # Others
   intl: ^0.18.1
   url_launcher: ^6.2.2
+  dart_geohash: ^2.1.0
 
 dev_dependencies:
   flutter_test:
@@ -57,6 +58,7 @@ flutter:
     - assets/images/
     - assets/icons/
     - assets/maps/
+    - assets/data/
   
   # fonts:
   #   - family: Roboto

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:water_fountain_finder/models/fountain.dart';
+import 'package:water_fountain_finder/models/local_fountain.dart';
 import 'package:water_fountain_finder/utils/constants.dart';
 
 class FountainInfoCard extends StatelessWidget {
-  final Fountain fountain;
+  final LocalFountain fountain;
   final VoidCallback onClose;
 
   const FountainInfoCard({
@@ -164,36 +164,7 @@ class FountainInfoCard extends StatelessWidget {
                   ),
                 ],
 
-                // Rating
-                if (fountain.rating != null) ...[
-                  const SizedBox(height: AppSizes.paddingM),
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.star,
-                        size: 16,
-                        color: Colors.amber.shade600,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${fountain.rating!.toStringAsFixed(1)}',
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.black87,
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '(${fountain.reviewCount} reviews)',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey.shade600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+
 
                 // Action buttons
                 const SizedBox(height: AppSizes.paddingM),
@@ -278,57 +249,57 @@ class FountainInfoCard extends StatelessWidget {
     );
   }
 
-  IconData _getFountainIcon(FountainType type) {
+  IconData _getFountainIcon(LocalFountainType type) {
     switch (type) {
-      case FountainType.fountain:
+      case LocalFountainType.fountain:
         return Icons.water_drop;
-      case FountainType.tap:
+      case LocalFountainType.tap:
         return Icons.tap_and_play;
-      case FountainType.refillStation:
+      case LocalFountainType.refillStation:
         return Icons.local_drink;
     }
   }
 
-  Color _getFountainColor(FountainType type) {
+  Color _getFountainColor(LocalFountainType type) {
     switch (type) {
-      case FountainType.fountain:
+      case LocalFountainType.fountain:
         return AppColors.fountainBlue;
-      case FountainType.tap:
+      case LocalFountainType.tap:
         return AppColors.tapBlue;
-      case FountainType.refillStation:
+      case LocalFountainType.refillStation:
         return AppColors.waterBlue;
     }
   }
 
-  Color _getWaterQualityColor(WaterQuality quality) {
+  Color _getWaterQualityColor(LocalWaterQuality quality) {
     switch (quality) {
-      case WaterQuality.potable:
+      case LocalWaterQuality.potable:
         return AppColors.success;
-      case WaterQuality.nonPotable:
+      case LocalWaterQuality.nonPotable:
         return AppColors.warning;
-      case WaterQuality.unknown:
+      case LocalWaterQuality.unknown:
         return AppColors.info;
     }
   }
 
-  Color _getAccessibilityColor(Accessibility accessibility) {
+  Color _getAccessibilityColor(LocalAccessibility accessibility) {
     switch (accessibility) {
-      case Accessibility.public:
+      case LocalAccessibility.public:
         return AppColors.success;
-      case Accessibility.restricted:
+      case LocalAccessibility.restricted:
         return AppColors.warning;
-      case Accessibility.private:
+      case LocalAccessibility.private:
         return AppColors.error;
     }
   }
 
-  Color _getStatusColor(FountainStatus status) {
+  Color _getStatusColor(LocalFountainStatus status) {
     switch (status) {
-      case FountainStatus.active:
+      case LocalFountainStatus.active:
         return AppColors.success;
-      case FountainStatus.inactive:
+      case LocalFountainStatus.inactive:
         return AppColors.error;
-      case FountainStatus.maintenance:
+      case LocalFountainStatus.maintenance:
         return AppColors.warning;
     }
   }

@@ -23,7 +23,7 @@ class ImportUtils {
     int limit = 50,
     DocumentSnapshot? startAfter,
   }) {
-    Query query = FirebaseFirestore.instance
+    Query<Map<String, dynamic>> query = FirebaseFirestore.instance
         .collection(fountainsCollection)
         .where('importSource', isEqualTo: italyOsmSource)
         .orderBy('addedDate', descending: true)

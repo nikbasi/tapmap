@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:latlong2/latlong.dart';
 
 class AppColors {
   static const Color primary = Color(0xFF2196F3);
@@ -99,6 +100,13 @@ class AppConfig {
   static const double minZoom = 10.0;
   static const double maxZoom = 18.0;
   static const double searchRadiusKm = 50.0; // Increased from 5km to 50km
+  
+  // Default location (Rome, Italy as fallback)
+  static const LatLng defaultLocation = LatLng(41.9028, 12.4964);
+  
+  // Tile URLs for the map
+  static const String streetTileUrl = osmTileUrl;
+  static const String satelliteTileUrl = esriSatelliteUrl;
   
   // Cache Configuration
   static const int maxCacheSize = 100;

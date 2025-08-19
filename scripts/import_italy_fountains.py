@@ -92,7 +92,7 @@ class ItalyFountainsImporter:
             'description': fountain_data.get('description', ''),
             'location': firestore.GeoPoint(latitude, longitude),
             'type': fountain_data.get('type', 'fountain'),
-            'status': fountain_data.get('status', 'active'),
+            'status': 'active',  # Keep as string 'active' to match the enum parsing in Flutter
             'waterQuality': fountain_data.get('waterQuality', 'unknown'),
             'accessibility': fountain_data.get('accessibility', 'public'),
             'addedBy': 'osm_import_italy',
