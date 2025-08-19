@@ -62,9 +62,18 @@ echo
 echo "To activate it manually:"
 echo "  source .venv/bin/activate"
 echo
-echo "To run the fountain downloader:"
-echo "  python download_fountains.py"
-echo "  python download_italy_fountains.py"
+echo "To run the data pipeline:"
+echo "  # Step 1: Calculate geohashes with Dart"
+echo "  dart calculate_geohashes_dart.dart"
+echo "  # Step 2: Convert to Dart data file"
+echo "  python convert_dart_geohash_json_to_dart.py"
+echo
+echo "To import fountains to Firebase:"
+echo "  # Configure your Firebase service account"
+echo "  cp firebase-service-account.json.template firebase-service-account.json"
+echo "  # Edit firebase-service-account.json with your credentials"
+echo "  # Then import:"
+echo "  python import_with_service_account.py --key-file firebase-service-account.json --data-file italy_data_fixed/fountains_firebase_20250817_010551.json"
 echo
 echo "To deactivate when done:"
 echo "  deactivate"

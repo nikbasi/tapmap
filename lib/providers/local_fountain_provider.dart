@@ -1,10 +1,10 @@
 import 'dart:convert';
-import 'dart:math';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:water_fountain_finder/models/local_fountain.dart';
 import 'package:water_fountain_finder/utils/geohash_utils.dart';
-import 'package:water_fountain_finder/data/fountain_data.dart';
+import 'package:water_fountain_finder/data/enhanced_fountain_data.dart';
 
 class LocalFountainProvider extends ChangeNotifier {
   List<LocalFountain> _allFountains = [];
@@ -37,10 +37,10 @@ class LocalFountainProvider extends ChangeNotifier {
       _setLoading(true);
       _clearError();
 
-      print('🔄 Loading real fountain data from converted dataset...');
+      print('🔄 Loading real fountain data from enhanced dataset with pre-calculated geohashes...');
       
-      // Get real fountain data from the converted dataset
-      final sampleFountains = FountainData.getSampleFountains();
+      // Get real fountain data from the enhanced dataset with pre-calculated geohashes
+      final sampleFountains = EnhancedFountainData.getAllFountains();
       
       final List<LocalFountain> fountains = [];
       
@@ -72,9 +72,9 @@ class LocalFountainProvider extends ChangeNotifier {
           
           // Create fountain with geohash fields
           final fountainWithGeohash = fountain.copyWithGeohashes(
-            geohash: geohash,
-            geohash4: geohash4,
-            geohash3: geohash3,
+            geohashPrec5: geohash,
+            geohashPrec4: geohash4,
+            geohashPrec3: geohash3,
           );
           
           fountains.add(fountainWithGeohash);
@@ -146,13 +146,13 @@ class LocalFountainProvider extends ChangeNotifier {
           case 1:
           case 2:
           case 3:
-            fountainGeohash = fountain.geohash3;
+            fountainGeohash = fountain.geohashPrec3;
             break;
           case 4:
-            fountainGeohash = fountain.geohash4;
+            fountainGeohash = fountain.geohashPrec4;
             break;
           default:
-            fountainGeohash = fountain.geohash;
+            fountainGeohash = fountain.geohashPrec5;
         }
 
         // Check if fountain's geohash matches any of the viewport prefixes
@@ -206,7 +206,7 @@ class LocalFountainProvider extends ChangeNotifier {
     try {
       // Calculate bounding box for the radius
       final latDelta = radiusKm / 111.0; // Approximate km per degree latitude
-      final lonDelta = radiusKm / (111.0 * cos(latitude * pi / 180.0)); // Adjust for longitude
+      final lonDelta = radiusKm / (111.0 * math.cos(latitude * math.pi / 180.0)); // Adjust for longitude
 
       final northLat = latitude + latDelta;
       final southLat = latitude - latDelta;
@@ -336,17 +336,17 @@ class LocalFountainProvider extends ChangeNotifier {
     final dLat = _degreesToRadians(lat2 - lat1);
     final dLon = _degreesToRadians(lon2 - lon1);
     
-          final a = sin(dLat / 2) * sin(dLat / 2) +
-          cos(lat1 * pi / 180.0) * cos(lat2 * pi / 180.0) *
-          sin(dLon / 2) * sin(dLon / 2);
+          final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
+          math.cos(lat1 * math.pi / 180.0) * math.cos(lat2 * math.pi / 180.0) *
+          math.sin(dLon / 2) * math.sin(dLon / 2);
       
-      final c = 2 * atan(sqrt(a) / sqrt(1 - a));
+      final c = 2 * math.atan(math.sqrt(a) / math.sqrt(1 - a));
     
     return earthRadius * c;
   }
 
   static double _degreesToRadians(double degrees) {
-    return degrees * (pi / 180.0);
+    return degrees * (math.pi / 180.0);
   }
 
   // Private helper methods

@@ -14,6 +14,11 @@ This script uses an EXPANDED query to capture significantly more fountain types:
 - Any element with drinking_water=yes
 
 The expanded query should find many more fountains than the previous restrictive version.
+
+DEFAULT BOUNDING BOXES:
+- Italy: 35.0,-10.0,47.0,20.0 (covers mainland Italy, Sicily, Sardinia)
+- Switzerland: 45.7,5.9,47.9,10.5
+- France: 41.3,-5.2,51.1,9.6
 """
 
 import requests
@@ -28,6 +33,17 @@ from pathlib import Path
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+# Default bounding boxes for different regions
+DEFAULT_BBOXES = {
+    'italy': '35.0,-10.0,47.0,20.0',      # Mainland Italy, Sicily, Sardinia
+    'switzerland': '45.7,5.9,47.9,10.5',   # Switzerland
+    'france': '41.3,-5.2,51.1,9.6',        # France
+    'germany': '47.2,5.8,55.1,15.0',       # Germany
+    'austria': '46.3,9.5,49.0,17.2',       # Austria
+    'slovenia': '45.4,13.3,46.9,16.6',     # Slovenia
+    'croatia': '42.2,13.2,46.6,19.4',      # Croatia
+}
 
 @dataclass
 class FountainData:
@@ -53,6 +69,15 @@ class FountainDownloader:
             'User-Agent': 'WaterFountainFinder/1.0'
         })
     
+    def get_default_bbox(self, region: str) -> str:
+        """Get default bounding box for a specific region"""
+        region_lower = region.lower()
+        if region_lower in DEFAULT_BBOXES:
+            return DEFAULT_BBOXES[region_lower]
+        else:
+            available_regions = ', '.join(DEFAULT_BBOXES.keys())
+            raise ValueError(f"Unknown region '{region}'. Available regions: {available_regions}")
+    
     def build_query(self, bbox: Optional[str] = None, limit: Optional[int] = None) -> str:
         """
         Build comprehensive Overpass query to capture all types of water fountains
@@ -61,11 +86,11 @@ class FountainDownloader:
             bbox: Optional bounding box (south,west,north,east)
             limit: Optional limit on number of results
         """
-        # Start with the header
+        # Start with the header - increased timeout for large regions
         if limit:
-            header = "[out:json][timeout:300];"  # Temporarily remove limit to test
+            header = "[out:json][timeout:900];"  # 15 minutes timeout for large queries
         else:
-            header = "[out:json][timeout:300];"
+            header = "[out:json][timeout:900];"  # 15 minutes timeout for large queries
         
         # Build query using the exact working format from test_working_query.py
         if bbox:
@@ -186,6 +211,11 @@ out center;"""
         query = self.build_query(bbox, limit)
         logger.info(f"Downloading fountains with query:\n{query}")
         
+        # Show progress for large queries
+        if bbox:
+            logger.info("📡 Large region detected - this may take several minutes...")
+            logger.info("⏳ Please be patient while Overpass API processes the request...")
+        
         try:
             # Debug: Print the exact request being sent
             logger.info(f"Sending request to: {self.overpass_url}")
@@ -193,7 +223,7 @@ out center;"""
             logger.info(f"Request headers: {self.session.headers}")
             
             # Try using requests.post directly like the working test
-            response = requests.post(self.overpass_url, data={'data': query}, timeout=300)  # Increased timeout for large queries
+            response = requests.post(self.overpass_url, data={'data': query}, timeout=900)  # 15 minutes timeout for large queries
             logger.info(f"Response status: {response.status_code}")
             logger.info(f"Response headers: {dict(response.headers)}")
             
@@ -204,13 +234,17 @@ out center;"""
             
             return self._parse_elements(data.get('elements', []))
             
+        except requests.exceptions.Timeout:
+            logger.error("⏰ Request timed out after 15 minutes. The region may be too large.")
+            logger.error("💡 Try using a smaller region or add --limit to reduce results.")
+            return []
         except requests.exceptions.RequestException as e:
-            logger.error(f"Error downloading data: {e}")
+            logger.error(f"❌ Error downloading data: {e}")
             if hasattr(e, 'response') and e.response is not None:
                 logger.error(f"Response content: {e.response.text[:500]}")
             return []
         except json.JSONDecodeError as e:
-            logger.error(f"Error parsing JSON response: {e}")
+            logger.error(f"❌ Error parsing JSON response: {e}")
             return []
     
     def _parse_elements(self, elements: List[Dict[str, Any]]) -> List[FountainData]:
@@ -449,12 +483,32 @@ class DataExporter:
 def main():
     """Main function"""
     parser = argparse.ArgumentParser(description='Download water fountains from OpenStreetMap')
-    parser.add_argument('--bbox', help='Bounding box (south,west,north,east)')
+    parser.add_argument('--region', choices=list(DEFAULT_BBOXES.keys()), 
+                       help='Predefined region (uses default bounding box)')
+    parser.add_argument('--bbox', help='Custom bounding box (south,west,north,east)')
     parser.add_argument('--limit', type=int, help='Limit number of results')
     parser.add_argument('--output-dir', default='./data', help='Output directory')
     parser.add_argument('--format', choices=['json', 'firebase'], default='firebase', help='Output format')
     
     args = parser.parse_args()
+    
+    # Determine bounding box
+    bbox = None
+    if args.region:
+        try:
+            downloader = FountainDownloader()
+            bbox = downloader.get_default_bbox(args.region)
+            logger.info(f"Using default bounding box for {args.region}: {bbox}")
+        except ValueError as e:
+            logger.error(f"Region error: {e}")
+            return
+    elif args.bbox:
+        bbox = args.bbox
+        logger.info(f"Using custom bounding box: {bbox}")
+    else:
+        # Default to Italy if no region or bbox specified
+        bbox = DEFAULT_BBOXES['italy']
+        logger.info(f"No region or bbox specified, defaulting to Italy: {bbox}")
     
     # Create output directory
     output_dir = Path(args.output_dir)
@@ -465,7 +519,7 @@ def main():
     
     # Download fountains
     logger.info("Starting fountain download...")
-    fountains = downloader.download_fountains(bbox=args.bbox, limit=args.limit)
+    fountains = downloader.download_fountains(bbox=bbox, limit=args.limit)
     
     if not fountains:
         logger.error("No fountains downloaded. Exiting.")
@@ -487,6 +541,7 @@ def main():
     # Print summary
     print(f"\n📊 Download Summary:")
     print(f"   Total fountains: {len(fountains)}")
+    print(f"   Bounding box: {bbox}")
     print(f"   Output directory: {output_dir}")
     print(f"   File created: {output_file.name}")
     
@@ -502,11 +557,16 @@ def main():
     print(f"   • Emergency drinking water facilities")
     print(f"   • All using officially supported OpenStreetMap tags")
     
+    print(f"\n🌍 Available Regions:")
+    for region, bbox_coords in DEFAULT_BBOXES.items():
+        print(f"   • {region.capitalize()}: {bbox_coords}")
+    
     print(f"\n🚰 Next steps:")
     print(f"   1. Review the downloaded data")
     print(f"   2. Import the Firebase JSON file to your database")
     print(f"   3. Update your app to display the imported fountains")
     print(f"   4. The enhanced query now captures ALL drinkable fountain types!")
+    print(f"   5. Use --region to quickly download from predefined areas")
 
 if __name__ == "__main__":
     main()

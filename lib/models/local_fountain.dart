@@ -22,9 +22,9 @@ class LocalFountain {
   final Map<String, dynamic>? osmData;
   
   // Geohash fields for efficient geographic queries
-  final String geohash;      // 5-character precision
-  final String geohash4;     // 4-character precision
-  final String geohash3;     // 3-character precision
+  final String geohashPrec5; // 5-character precision (~2.4km grid)
+  final String geohashPrec4; // 4-character precision (~20km grid)
+  final String geohashPrec3; // 3-character precision (~78km grid)
 
   LocalFountain({
     required this.id,
@@ -41,9 +41,9 @@ class LocalFountain {
     required this.photos,
     required this.tags,
     this.osmData,
-    required this.geohash,
-    required this.geohash4,
-    required this.geohash3,
+    required this.geohashPrec5,
+    required this.geohashPrec4,
+    required this.geohashPrec3,
   });
 
   // Convert to LatLng for map usage
@@ -163,17 +163,17 @@ class LocalFountain {
       tags: List<String>.from(json['tags'] ?? []),
       osmData: json['osmData'],
       // Geohash fields will be calculated after creation
-      geohash: '',
-      geohash4: '',
-      geohash3: '',
+      geohashPrec5: '',
+      geohashPrec4: '',
+      geohashPrec3: '',
     );
   }
 
   // Copy with method for updating geohash fields
   LocalFountain copyWithGeohashes({
-    required String geohash,
-    required String geohash4,
-    required String geohash3,
+    required String geohashPrec5,
+    required String geohashPrec4,
+    required String geohashPrec3,
   }) {
     return LocalFountain(
       id: id,
@@ -190,9 +190,9 @@ class LocalFountain {
       photos: photos,
       tags: tags,
       osmData: osmData,
-      geohash: geohash,
-      geohash4: geohash4,
-      geohash3: geohash3,
+      geohashPrec5: geohashPrec5,
+      geohashPrec4: geohashPrec4,
+      geohashPrec3: geohashPrec3,
     );
   }
 
