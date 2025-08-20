@@ -53,8 +53,8 @@ void main() async {
   print('Calculating geohashes with Dart and updating JSON file...');
   
   // Input and output file paths
-  final inputFile = File('italy_data_fixed/fountains_firebase_20250817_010551.json');
-  final outputFile = File('italy_data_fixed/fountains_with_dart_geohashes.json');
+  final inputFile = File('world_data_ultra_granular/world_fountains_aggregated_20250820_142225.json');
+  final outputFile = File('world_data_ultra_granular/world_fountains_with_dart_geohashes.json');
   
   try {
     // Read the JSON file
@@ -90,15 +90,11 @@ void main() async {
           return;
         }
         
-        // Calculate geohashes using Dart implementation
-        final geohash5 = GeohashCalculator.encode(latitude, longitude, precision: 5);
-        final geohash4 = GeohashCalculator.encode(latitude, longitude, precision: 4);
-        final geohash3 = GeohashCalculator.encode(latitude, longitude, precision: 3);
+        // Calculate geohash with highest precision using Dart implementation
+        final geohash = GeohashCalculator.encode(latitude, longitude, precision: 12);
         
-        // Add geohash fields to the fountain data
-        fountainData['geohashPrec5'] = geohash5;
-        fountainData['geohashPrec4'] = geohash4;
-        fountainData['geohashPrec3'] = geohash3;
+        // Add single geohash field to the fountain data
+        fountainData['geohash'] = geohash;
         
         processedCount++;
         
@@ -113,10 +109,14 @@ void main() async {
       }
     });
     
-    // Write the updated JSON file
-    print('Writing updated JSON file...');
+    // Write the updated JSON file with nice formatting
+    print('Writing updated JSON file with nice formatting...');
     final updatedJsonString = json.encode(data);
-    await outputFile.writeAsString(updatedJsonString);
+    
+    // Pretty-print the JSON with proper indentation
+    final encoder = JsonEncoder.withIndent('  ');
+    final prettyJsonString = encoder.convert(data);
+    await outputFile.writeAsString(prettyJsonString);
     
     print('Successfully processed $processedCount fountains');
     print('Skipped $skippedCount fountains (invalid coordinates)');
