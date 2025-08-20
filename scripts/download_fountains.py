@@ -86,9 +86,11 @@ class FountainDownloader:
             bbox: Optional bounding box (south,west,north,east)
             limit: Optional limit on number of results
         """
-        # Start with the header - increased timeout for large regions
-        if limit:
-            header = "[out:json][timeout:900];"  # 15 minutes timeout for large queries
+        # Start with the header - no timeout for global queries, extended timeout for large regions
+        if not bbox:
+            header = "[out:json];"  # No timeout for global queries
+        elif limit:
+            header = "[out:json][timeout:1800];"  # 30 minutes timeout for large queries
         else:
             header = "[out:json][timeout:900];"  # 15 minutes timeout for large queries
         
@@ -223,7 +225,11 @@ out center;"""
             logger.info(f"Request headers: {self.session.headers}")
             
             # Try using requests.post directly like the working test
-            response = requests.post(self.overpass_url, data={'data': query}, timeout=900)  # 15 minutes timeout for large queries
+            # Use no timeout for global queries, extended timeout for large regions
+            if not bbox:
+                response = requests.post(self.overpass_url, data={'data': query})  # No timeout for global queries
+            else:
+                response = requests.post(self.overpass_url, data={'data': query}, timeout=1800)  # 30 minutes timeout for large regions
             logger.info(f"Response status: {response.status_code}")
             logger.info(f"Response headers: {dict(response.headers)}")
             
@@ -235,8 +241,12 @@ out center;"""
             return self._parse_elements(data.get('elements', []))
             
         except requests.exceptions.Timeout:
-            logger.error("⏰ Request timed out after 15 minutes. The region may be too large.")
-            logger.error("💡 Try using a smaller region or add --limit to reduce results.")
+            if not bbox:
+                logger.error("⏰ Global request timed out. This is expected for world-wide queries.")
+                logger.error("💡 Consider using regional downloads instead.")
+            else:
+                logger.error("⏰ Request timed out after 30 minutes. The region may be too large.")
+                logger.error("💡 Try using a smaller region or add --limit to reduce results.")
             return []
         except requests.exceptions.RequestException as e:
             logger.error(f"❌ Error downloading data: {e}")
@@ -486,6 +496,7 @@ def main():
     parser.add_argument('--region', choices=list(DEFAULT_BBOXES.keys()), 
                        help='Predefined region (uses default bounding box)')
     parser.add_argument('--bbox', help='Custom bounding box (south,west,north,east)')
+    parser.add_argument('--world', action='store_true', help='Download fountains from the entire world (no bounding box)')
     parser.add_argument('--limit', type=int, help='Limit number of results')
     parser.add_argument('--output-dir', default='./data', help='Output directory')
     parser.add_argument('--format', choices=['json', 'firebase'], default='firebase', help='Output format')
@@ -494,7 +505,12 @@ def main():
     
     # Determine bounding box
     bbox = None
-    if args.region:
+    if args.world:
+        bbox = None
+        logger.warning("🌍 WORLD DOWNLOAD SELECTED - This will attempt to download ALL fountains in the world!")
+        logger.warning("⚠️  This is a massive operation that may timeout or take hours to complete.")
+        logger.warning("💡 Consider using regional downloads instead for better reliability.")
+    elif args.region:
         try:
             downloader = FountainDownloader()
             bbox = downloader.get_default_bbox(args.region)
@@ -541,7 +557,10 @@ def main():
     # Print summary
     print(f"\n📊 Download Summary:")
     print(f"   Total fountains: {len(fountains)}")
-    print(f"   Bounding box: {bbox}")
+    if bbox:
+        print(f"   Bounding box: {bbox}")
+    else:
+        print(f"   Bounding box: GLOBAL (entire world)")
     print(f"   Output directory: {output_dir}")
     print(f"   File created: {output_file.name}")
     
@@ -560,6 +579,11 @@ def main():
     print(f"\n🌍 Available Regions:")
     for region, bbox_coords in DEFAULT_BBOXES.items():
         print(f"   • {region.capitalize()}: {bbox_coords}")
+    
+    print(f"\n🌐 World Download:")
+    print(f"   • Use --world to download fountains from the entire world")
+    print(f"   • Warning: This is a massive operation that may timeout")
+    print(f"   • Consider regional downloads for better reliability")
     
     print(f"\n🚰 Next steps:")
     print(f"   1. Review the downloaded data")

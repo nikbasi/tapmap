@@ -134,3 +134,8 @@ mapbox_access_token.txt
 **/*.csv
 **/*.xml
 **/*.geojson
+
+# Downloaded world fountain data
+scripts/world_data_ultra_granular/
+scripts/world_data/
+scripts/world_data_granular/
