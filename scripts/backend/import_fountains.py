@@ -15,6 +15,10 @@ from psycopg2.extras import RealDictCursor
 import geohash
 from datetime import datetime
 import time
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(
@@ -26,9 +30,9 @@ logger = logging.getLogger(__name__)
 # Database configuration
 DB_CONFIG = {
     'host': os.getenv('DB_HOST', 'localhost'),
-    'database': os.getenv('DB_NAME', 'fountain_db'),
-    'user': os.getenv('DB_USER', 'fountain_user'),
-    'password': os.getenv('DB_PASSWORD', 'fountain_password'),
+    'database': os.getenv('DB_NAME', 'tapmap_db'),
+    'user': os.getenv('DB_USER', 'tapmap_user'),
+    'password': os.getenv('DB_PASSWORD', '$fountains.2025$'),
     'port': os.getenv('DB_PORT', '5432')
 }
 
@@ -348,4 +352,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 

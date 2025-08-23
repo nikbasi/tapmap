@@ -1,7 +1,7 @@
 -- Fountain Database Schema for Geohash-based Queries
 -- Optimized for multi-zoom map applications
 
--- Enable PostGIS extension for advanced spatial operations (optional)
+-- Enable PostGIS extension for advanced spatial operations (optional) 
 -- CREATE EXTENSION IF NOT EXISTS postgis;
 
 -- Main fountains table
@@ -16,13 +16,13 @@ CREATE TABLE fountains (
     water_quality VARCHAR(100) DEFAULT 'potable',
     accessibility VARCHAR(100) DEFAULT 'public',
     added_by VARCHAR(255) DEFAULT 'osm_import',
-    added_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    added_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,     
     validations JSONB DEFAULT '[]',
     photos JSONB DEFAULT '[]',
     tags JSONB DEFAULT '[]',
     osm_data JSONB,
     geohash VARCHAR(12) NOT NULL,
-    
+
     -- Geohash precision levels for efficient zoom queries
     geohash_1 VARCHAR(1),
     geohash_2 VARCHAR(2),
@@ -36,10 +36,10 @@ CREATE TABLE fountains (
     geohash_10 VARCHAR(10),
     geohash_11 VARCHAR(11),
     geohash_12 VARCHAR(12),
-    
+
     -- Metadata
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,     
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP      
 );
 
 -- Indexes for fast geohash prefix queries
@@ -53,15 +53,15 @@ CREATE INDEX idx_fountains_geohash_6 ON fountains(geohash_6);
 CREATE INDEX idx_fountains_geohash_7 ON fountains(geohash_7);
 CREATE INDEX idx_fountains_geohash_8 ON fountains(geohash_8);
 CREATE INDEX idx_fountains_geohash_9 ON fountains(geohash_9);
-CREATE INDEX idx_fountains_geohash_10 ON fountains(geohash_10);
-CREATE INDEX idx_fountains_geohash_11 ON fountains(geohash_11);
-CREATE INDEX idx_fountains_geohash_12 ON fountains(geohash_12);
+CREATE INDEX idx_fountains_geohash_10 ON fountains(geohash_10);        
+CREATE INDEX idx_fountains_geohash_11 ON fountains(geohash_11);        
+CREATE INDEX idx_fountains_geohash_12 ON fountains(geohash_12);        
 
 -- Composite indexes for common query patterns
-CREATE INDEX idx_fountains_location ON fountains(latitude, longitude);
+CREATE INDEX idx_fountains_location ON fountains(latitude, longitude); 
 CREATE INDEX idx_fountains_status ON fountains(status);
 CREATE INDEX idx_fountains_type ON fountains(type);
-CREATE INDEX idx_fountains_water_quality ON fountains(water_quality);
+CREATE INDEX idx_fountains_water_quality ON fountains(water_quality);  
 
 -- Full text search on name and description
 CREATE INDEX idx_fountains_name_search ON fountains USING gin(to_tsvector('english', name));
@@ -69,7 +69,7 @@ CREATE INDEX idx_fountains_description_search ON fountains USING gin(to_tsvector
 
 -- JSONB indexes for tags and other JSON fields
 CREATE INDEX idx_fountains_tags ON fountains USING gin(tags);
-CREATE INDEX idx_fountains_osm_data ON fountains USING gin(osm_data);
+CREATE INDEX idx_fountains_osm_data ON fountains USING gin(osm_data);  
 
 -- Function to automatically update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -81,9 +81,9 @@ END;
 $$ language 'plpgsql';
 
 -- Trigger to automatically update updated_at
-CREATE TRIGGER update_fountains_updated_at 
-    BEFORE UPDATE ON fountains 
-    FOR EACH ROW 
+CREATE TRIGGER update_fountains_updated_at
+    BEFORE UPDATE ON fountains
+    FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
 -- Function to calculate geohash precision levels
@@ -121,76 +121,74 @@ $$ LANGUAGE plpgsql;
 
 -- View for fountain statistics by geohash precision
 CREATE VIEW fountain_stats_by_precision AS
-SELECT 
+SELECT
     '1' as precision,
     COUNT(*) as fountain_count,
     COUNT(DISTINCT geohash_1) as unique_geohashes
 FROM fountains
 UNION ALL
-SELECT 
+SELECT
     '2' as precision,
     COUNT(*) as fountain_count,
     COUNT(DISTINCT geohash_2) as unique_geohashes
 FROM fountains
 UNION ALL
-SELECT 
+SELECT
     '3' as precision,
     COUNT(*) as fountain_count,
     COUNT(DISTINCT geohash_3) as unique_geohashes
 FROM fountains
 UNION ALL
-SELECT 
+SELECT
     '4' as precision,
     COUNT(*) as fountain_count,
     COUNT(DISTINCT geohash_4) as unique_geohashes
 FROM fountains
 UNION ALL
-SELECT 
+SELECT
     '5' as precision,
     COUNT(*) as fountain_count,
     COUNT(DISTINCT geohash_5) as unique_geohashes
 FROM fountains
 UNION ALL
-SELECT 
+SELECT
     '6' as precision,
     COUNT(*) as fountain_count,
     COUNT(DISTINCT geohash_6) as unique_geohashes
 FROM fountains
 UNION ALL
-SELECT 
+SELECT
     '7' as precision,
     COUNT(*) as fountain_count,
     COUNT(DISTINCT geohash_7) as unique_geohashes
 FROM fountains
 UNION ALL
-SELECT 
+SELECT
     '8' as precision,
     COUNT(*) as fountain_count,
     COUNT(DISTINCT geohash_8) as unique_geohashes
 FROM fountains
 UNION ALL
-SELECT 
+SELECT
     '9' as precision,
     COUNT(*) as fountain_count,
     COUNT(DISTINCT geohash_9) as unique_geohashes
 FROM fountains
 UNION ALL
-SELECT 
+SELECT
     '10' as precision,
     COUNT(*) as fountain_count,
     COUNT(DISTINCT geohash_10) as unique_geohashes
 FROM fountains
 UNION ALL
-SELECT 
+SELECT
     '11' as precision,
     COUNT(*) as fountain_count,
     COUNT(DISTINCT geohash_11) as unique_geohashes
 FROM fountains
 UNION ALL
-SELECT 
+SELECT
     '12' as precision,
     COUNT(*) as fountain_count,
     COUNT(DISTINCT geohash_12) as unique_geohashes
 FROM fountains
-ORDER BY precision::integer;
-
