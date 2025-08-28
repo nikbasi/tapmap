@@ -115,9 +115,30 @@ The script will:
     // Read the JSON file
     print('Reading JSON file...');
     final jsonString = await inputFile.readAsString();
-    final Map<String, dynamic> data = json.decode(jsonString);
+    final dynamic rawData = json.decode(jsonString);
     
-    print('JSON loaded successfully. Found ${data.length} fountain entries.');
+    // Handle both Map and List formats
+    Map<String, dynamic> data;
+    bool isListFormat = false;
+    
+    if (rawData is Map<String, dynamic>) {
+      // Original format: {"fountain_id": {...}}
+      data = rawData;
+      print('JSON loaded successfully. Found ${data.length} fountain entries (Map format).');
+    } else if (rawData is List<dynamic>) {
+      // New format: [{...}, {...}, {...}]
+      isListFormat = true;
+      // Convert list to map with auto-generated IDs
+      data = <String, dynamic>{};
+      for (int i = 0; i < rawData.length; i++) {
+        final fountainData = rawData[i] as Map<String, dynamic>;
+        final fountainId = fountainData['id'] ?? 'fountain_$i';
+        data[fountainId] = fountainData;
+      }
+      print('JSON loaded successfully. Found ${data.length} fountain entries (List format, converted to Map).');
+    } else {
+      throw FormatException('Unsupported JSON format. Expected Map or List, got ${rawData.runtimeType}');
+    }
     
     // Process each fountain entry
     print('Calculating geohashes with Dart...');
@@ -164,13 +185,21 @@ The script will:
       }
     });
     
+    // Convert back to original format if it was a list
+    dynamic outputData;
+    if (isListFormat) {
+      outputData = data.values.toList();
+      print('Converting back to List format for output...');
+    } else {
+      outputData = data;
+    }
+    
     // Write the updated JSON file with nice formatting
     print('Writing updated JSON file with nice formatting...');
-    final updatedJsonString = json.encode(data);
     
     // Pretty-print the JSON with proper indentation
     final encoder = JsonEncoder.withIndent('  ');
-    final prettyJsonString = encoder.convert(data);
+    final prettyJsonString = encoder.convert(outputData);
     await outputFile.writeAsString(prettyJsonString);
     
     print('Successfully processed $processedCount fountains');
