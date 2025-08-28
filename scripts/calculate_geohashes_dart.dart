@@ -49,12 +49,67 @@ class GeohashCalculator {
   }
 }
 
-void main() async {
+void main(List<String> args) async {
+  // Show help if requested
+  if (args.contains('--help') || args.contains('-h')) {
+    print('''
+Usage: dart calculate_geohashes_dart.dart [input_file] [output_file]
+
+Arguments:
+  input_file    Path to the input JSON file (default: world_data_ultra_granular/world_fountains_ultra_granular_combined_firebase.json)
+  output_file   Path to the output JSON file (default: auto-generated based on input filename)
+
+Examples:
+  dart calculate_geohashes_dart.dart
+  dart calculate_geohashes_dart.dart my_fountains.json
+  dart calculate_geohashes_dart.dart my_fountains.json my_output.json
+  dart calculate_geohashes_dart.dart --help
+
+The script will:
+  - Read the input JSON file
+  - Calculate geohashes for each fountain using Dart implementation
+  - Add a 'geohash' field to each fountain entry
+  - Save the result to the output file
+''');
+    return;
+  }
+  
   print('Calculating geohashes with Dart and updating JSON file...');
   
+  // Parse command line arguments
+  String inputFilePath;
+  String outputFilePath;
+  
+  if (args.length >= 1) {
+    inputFilePath = args[0];
+  } else {
+    inputFilePath = 'world_data_ultra_granular/world_fountains_ultra_granular_combined_firebase.json';
+  }
+  
+  if (args.length >= 2) {
+    outputFilePath = args[1];
+  } else {
+    // Generate output filename based on input filename
+    final inputFile = File(inputFilePath);
+    final baseName = inputFile.path.split('/').last.replaceAll('.json', '');
+    outputFilePath = '${inputFile.parent.path}/${baseName}_with_dart_geohashes.json';
+  }
+  
   // Input and output file paths
-  final inputFile = File('world_data_ultra_granular/world_fountains_aggregated_20250820_142225.json');
-  final outputFile = File('world_data_ultra_granular/world_fountains_with_dart_geohashes.json');
+  final inputFile = File(inputFilePath);
+  final outputFile = File(outputFilePath);
+  
+  print('Input file: ${inputFile.path}');
+  print('Output file: ${outputFile.path}');
+  
+  // Check if input file exists
+  if (!inputFile.existsSync()) {
+    print('Error: Input file does not exist: ${inputFile.path}');
+    print('Usage: dart calculate_geohashes_dart.dart [input_file] [output_file]');
+    print('Example: dart calculate_geohashes_dart.dart my_fountains.json my_fountains_with_geohashes.json');
+    print('Use --help for more information');
+    exit(1);
+  }
   
   try {
     // Read the JSON file
