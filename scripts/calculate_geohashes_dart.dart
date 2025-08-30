@@ -49,96 +49,20 @@ class GeohashCalculator {
   }
 }
 
-void main(List<String> args) async {
-  // Show help if requested
-  if (args.contains('--help') || args.contains('-h')) {
-    print('''
-Usage: dart calculate_geohashes_dart.dart [input_file] [output_file]
-
-Arguments:
-  input_file    Path to the input JSON file (default: world_data_ultra_granular/world_fountains_ultra_granular_combined_firebase.json)
-  output_file   Path to the output JSON file (default: auto-generated based on input filename)
-
-Examples:
-  dart calculate_geohashes_dart.dart
-  dart calculate_geohashes_dart.dart my_fountains.json
-  dart calculate_geohashes_dart.dart my_fountains.json my_output.json
-  dart calculate_geohashes_dart.dart --help
-
-The script will:
-  - Read the input JSON file
-  - Calculate geohashes for each fountain using Dart implementation
-  - Add a 'geohash' field to each fountain entry
-  - Save the result to the output file
-''');
-    return;
-  }
-  
+void main() async {
   print('Calculating geohashes with Dart and updating JSON file...');
   
-  // Parse command line arguments
-  String inputFilePath;
-  String outputFilePath;
-  
-  if (args.length >= 1) {
-    inputFilePath = args[0];
-  } else {
-    inputFilePath = 'world_data_ultra_granular/world_fountains_ultra_granular_combined_firebase.json';
-  }
-  
-  if (args.length >= 2) {
-    outputFilePath = args[1];
-  } else {
-    // Generate output filename based on input filename
-    final inputFile = File(inputFilePath);
-    final baseName = inputFile.path.split('/').last.replaceAll('.json', '');
-    outputFilePath = '${inputFile.parent.path}/${baseName}_with_dart_geohashes.json';
-  }
-  
   // Input and output file paths
-  final inputFile = File(inputFilePath);
-  final outputFile = File(outputFilePath);
-  
-  print('Input file: ${inputFile.path}');
-  print('Output file: ${outputFile.path}');
-  
-  // Check if input file exists
-  if (!inputFile.existsSync()) {
-    print('Error: Input file does not exist: ${inputFile.path}');
-    print('Usage: dart calculate_geohashes_dart.dart [input_file] [output_file]');
-    print('Example: dart calculate_geohashes_dart.dart my_fountains.json my_fountains_with_geohashes.json');
-    print('Use --help for more information');
-    exit(1);
-  }
+  final inputFile = File('world_data_ultra_granular/world_fountains_aggregated_20250820_142225.json');
+  final outputFile = File('world_data_ultra_granular/world_fountains_with_dart_geohashes.json');
   
   try {
     // Read the JSON file
     print('Reading JSON file...');
     final jsonString = await inputFile.readAsString();
-    final dynamic rawData = json.decode(jsonString);
+    final Map<String, dynamic> data = json.decode(jsonString);
     
-    // Handle both Map and List formats
-    Map<String, dynamic> data;
-    bool isListFormat = false;
-    
-    if (rawData is Map<String, dynamic>) {
-      // Original format: {"fountain_id": {...}}
-      data = rawData;
-      print('JSON loaded successfully. Found ${data.length} fountain entries (Map format).');
-    } else if (rawData is List<dynamic>) {
-      // New format: [{...}, {...}, {...}]
-      isListFormat = true;
-      // Convert list to map with auto-generated IDs
-      data = <String, dynamic>{};
-      for (int i = 0; i < rawData.length; i++) {
-        final fountainData = rawData[i] as Map<String, dynamic>;
-        final fountainId = fountainData['id'] ?? 'fountain_$i';
-        data[fountainId] = fountainData;
-      }
-      print('JSON loaded successfully. Found ${data.length} fountain entries (List format, converted to Map).');
-    } else {
-      throw FormatException('Unsupported JSON format. Expected Map or List, got ${rawData.runtimeType}');
-    }
+    print('JSON loaded successfully. Found ${data.length} fountain entries.');
     
     // Process each fountain entry
     print('Calculating geohashes with Dart...');
@@ -185,21 +109,13 @@ The script will:
       }
     });
     
-    // Convert back to original format if it was a list
-    dynamic outputData;
-    if (isListFormat) {
-      outputData = data.values.toList();
-      print('Converting back to List format for output...');
-    } else {
-      outputData = data;
-    }
-    
     // Write the updated JSON file with nice formatting
     print('Writing updated JSON file with nice formatting...');
+    final updatedJsonString = json.encode(data);
     
     // Pretty-print the JSON with proper indentation
     final encoder = JsonEncoder.withIndent('  ');
-    final prettyJsonString = encoder.convert(outputData);
+    final prettyJsonString = encoder.convert(data);
     await outputFile.writeAsString(prettyJsonString);
     
     print('Successfully processed $processedCount fountains');
