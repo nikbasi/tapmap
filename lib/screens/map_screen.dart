@@ -259,7 +259,6 @@ class _MapScreenState extends State<MapScreen> {
                   markers: _markers,
                   maxClusterRadius: 45,
                   size: const Size(42, 42),
-                  fitBoundsOptions: const FitBoundsOptions(padding: EdgeInsets.all(50)),
                   builder: (context, markers) => _buildClusterBubble(markers.length),
                   spiderfyCircleRadius: 40,
                   spiderfySpiralDistanceMultiplier: 1.0,
