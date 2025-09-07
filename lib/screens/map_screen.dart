@@ -254,18 +254,7 @@ class _MapScreenState extends State<MapScreen> {
                     : AppConfig.streetTileUrl,
                 userAgentPackageName: 'com.example.water_fountain_finder',
               ),
-              MarkerClusterLayerWidget(
-                options: MarkerClusterLayerOptions(
-                  markers: _markers,
-                  maxClusterRadius: 45,
-                  size: const Size(42, 42),
-                  builder: (context, markers) => _buildClusterBubble(markers.length),
-                  spiderfyCircleRadius: 40,
-                  spiderfySpiralDistanceMultiplier: 1.0,
-                  circleSpiralSwitchover: 9,
-                  zoomToBoundsOnClick: true,
-                ),
-              ),
+              MarkerLayer(markers: _markers),
             ],
           ),
           

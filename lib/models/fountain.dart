@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 enum FountainType { fountain, tap, refillStation }
 enum FountainStatus { active, inactive, maintenance }
 enum WaterQuality { potable, nonPotable, unknown }
@@ -9,7 +7,8 @@ class Fountain {
   final String id;
   final String name;
   final String description;
-  final GeoPoint location;
+  final double latitude;
+  final double longitude;
   final FountainType type;
   final FountainStatus status;
   final WaterQuality waterQuality;
@@ -33,7 +32,8 @@ class Fountain {
     required this.id,
     required this.name,
     required this.description,
-    required this.location,
+    required this.latitude,
+    required this.longitude,
     required this.type,
     required this.status,
     required this.waterQuality,
@@ -53,27 +53,30 @@ class Fountain {
     this.geohash3,
   });
 
-  factory Fountain.fromFirestore(DocumentSnapshot doc) {
-    Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-    
+  factory Fountain.fromMap(Map<String, dynamic> data) {
     return Fountain(
-      id: doc.id,
+      id: data['id'] ?? '',
       name: data['name'] ?? '',
       description: data['description'] ?? '',
-      location: data['location'] ?? const GeoPoint(0, 0),
+      latitude: (data['latitude'] ?? 0.0).toDouble(),
+      longitude: (data['longitude'] ?? 0.0).toDouble(),
       type: _parseFountainType(data['type']),
       status: _parseFountainStatus(data['status']),
       waterQuality: _parseWaterQuality(data['waterQuality']),
       accessibility: _parseAccessibility(data['accessibility']),
       addedBy: data['addedBy'] ?? '',
-      addedDate: (data['addedDate'] as Timestamp).toDate(),
+      addedDate: data['addedDate'] != null 
+          ? DateTime.parse(data['addedDate']) 
+          : DateTime.now(),
       validations: _parseValidations(data['validations']),
       photos: List<String>.from(data['photos'] ?? []),
       tags: List<String>.from(data['tags'] ?? []),
       rating: data['rating']?.toDouble(),
       reviewCount: data['reviewCount'] ?? 0,
       importSource: data['importSource'],
-      importDate: data['importDate'] != null ? (data['importDate'] as Timestamp).toDate() : null,
+      importDate: data['importDate'] != null 
+          ? DateTime.parse(data['importDate']) 
+          : null,
       osmData: data['osmData'],
       geohash: data['geohash'],
       geohash4: data['geohash4'],
@@ -81,24 +84,26 @@ class Fountain {
     );
   }
 
-  Map<String, dynamic> toFirestore() {
+  Map<String, dynamic> toMap() {
     return {
+      'id': id,
       'name': name,
       'description': description,
-      'location': location,
+      'latitude': latitude,
+      'longitude': longitude,
       'type': type.name,
       'status': status.name,
       'waterQuality': waterQuality.name,
       'accessibility': accessibility.name,
       'addedBy': addedBy,
-      'addedDate': Timestamp.fromDate(addedDate),
+      'addedDate': addedDate.toIso8601String(),
       'validations': validations.map((v) => v.toMap()).toList(),
       'photos': photos,
       'tags': tags,
       'rating': rating,
       'reviewCount': reviewCount,
       'importSource': importSource,
-      'importDate': importDate != null ? Timestamp.fromDate(importDate!) : null,
+      'importDate': importDate?.toIso8601String(),
       'osmData': osmData,
       'geohash': geohash,
       'geohash4': geohash4,
@@ -110,7 +115,8 @@ class Fountain {
     String? id,
     String? name,
     String? description,
-    GeoPoint? location,
+    double? latitude,
+    double? longitude,
     FountainType? type,
     FountainStatus? status,
     WaterQuality? waterQuality,
@@ -133,7 +139,8 @@ class Fountain {
       id: id ?? this.id,
       name: name ?? this.name,
       description: description ?? this.description,
-      location: location ?? this.location,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
       type: type ?? this.type,
       status: status ?? this.status,
       waterQuality: waterQuality ?? this.waterQuality,
@@ -215,7 +222,26 @@ class Fountain {
   bool get isActive => status == FountainStatus.active;
   bool get isPotable => waterQuality == WaterQuality.potable;
   bool get isPublic => accessibility == Accessibility.public;
+  bool get hasPhotos => photos.isNotEmpty;
+  bool get hasTags => tags.isNotEmpty;
+  bool get hasRating => rating != null;
+  bool get hasValidations => validations.isNotEmpty;
   
+  // Location helpers
+  bool get hasValidLocation => latitude != 0.0 && longitude != 0.0;
+  String get locationString => '${latitude.toStringAsFixed(6)}, ${longitude.toStringAsFixed(6)}';
+  
+  // Rating helpers
+  String get ratingDisplay => hasRating ? rating!.toStringAsFixed(1) : 'N/A';
+  String get reviewCountDisplay => reviewCount > 0 ? '$reviewCount reviews' : 'No reviews';
+  
+  // Type helpers
+  String get typeDisplay => type.name.replaceAll(RegExp(r'([A-Z])'), ' \$1').trim();
+  String get statusDisplay => status.name.replaceAll(RegExp(r'([A-Z])'), ' \$1').trim();
+  String get waterQualityDisplay => waterQuality.name.replaceAll(RegExp(r'([A-Z])'), ' \$1').trim();
+  String get accessibilityDisplay => accessibility.name.replaceAll(RegExp(r'([A-Z])'), ' \$1').trim();
+
+  // Display name methods for compatibility with existing UI
   String get typeDisplayName {
     switch (type) {
       case FountainType.fountain:
@@ -298,6 +324,20 @@ class Fountain {
       return '📅 Older';
     }
   }
+
+  @override
+  String toString() {
+    return 'Fountain(id: $id, name: $name, type: $type, status: $status)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is Fountain && other.id == id;
+  }
+
+  @override
+  int get hashCode => id.hashCode;
 }
 
 class Validation {
@@ -316,7 +356,9 @@ class Validation {
   factory Validation.fromMap(Map<String, dynamic> map) {
     return Validation(
       userId: map['userId'] ?? '',
-      timestamp: (map['timestamp'] as Timestamp).toDate(),
+      timestamp: map['timestamp'] != null 
+          ? DateTime.parse(map['timestamp']) 
+          : DateTime.now(),
       isValid: map['isValid'] ?? false,
       comment: map['comment'],
     );
@@ -325,7 +367,7 @@ class Validation {
   Map<String, dynamic> toMap() {
     return {
       'userId': userId,
-      'timestamp': Timestamp.fromDate(timestamp),
+      'timestamp': timestamp.toIso8601String(),
       'isValid': isValid,
       'comment': comment,
     };

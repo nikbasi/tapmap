@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 class UserModel {
   final String id;
   final String email;
@@ -7,13 +5,13 @@ class UserModel {
   final String? photoURL;
   final DateTime createdAt;
   final DateTime lastLoginAt;
-  final List<String> favoriteFountainIds;
-  final List<String> contributedFountainIds;
-  final List<String> validatedFountainIds;
-  final int contributionScore;
+  List<String> favoriteFountainIds;
+  List<String> contributedFountainIds;
+  List<String> validatedFountainIds;
+  int contributionScore;
   final bool isVerified;
   final String? phoneNumber;
-  final Map<String, dynamic> preferences;
+  Map<String, dynamic> preferences;
 
   UserModel({
     required this.id,
@@ -22,25 +20,32 @@ class UserModel {
     this.photoURL,
     required this.createdAt,
     required this.lastLoginAt,
-    required this.favoriteFountainIds,
-    required this.contributedFountainIds,
-    required this.validatedFountainIds,
-    this.contributionScore = 0,
+    List<String>? favoriteFountainIds,
+    List<String>? contributedFountainIds,
+    List<String>? validatedFountainIds,
+    int? contributionScore,
     this.isVerified = false,
     this.phoneNumber,
-    this.preferences = const {},
-  });
+    Map<String, dynamic>? preferences,
+  }) : 
+    favoriteFountainIds = favoriteFountainIds ?? [],
+    contributedFountainIds = contributedFountainIds ?? [],
+    validatedFountainIds = validatedFountainIds ?? [],
+    contributionScore = contributionScore ?? 0,
+    preferences = preferences ?? {};
 
-  factory UserModel.fromFirestore(DocumentSnapshot doc) {
-    Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-    
+  factory UserModel.fromMap(Map<String, dynamic> data) {
     return UserModel(
-      id: doc.id,
+      id: data['id'] ?? '',
       email: data['email'] ?? '',
       displayName: data['displayName'],
       photoURL: data['photoURL'],
-      createdAt: (data['createdAt'] as Timestamp).toDate(),
-      lastLoginAt: (data['lastLoginAt'] as Timestamp).toDate(),
+      createdAt: data['createdAt'] != null 
+          ? DateTime.parse(data['createdAt']) 
+          : DateTime.now(),
+      lastLoginAt: data['lastLoginAt'] != null 
+          ? DateTime.parse(data['lastLoginAt']) 
+          : DateTime.now(),
       favoriteFountainIds: List<String>.from(data['favoriteFountainIds'] ?? []),
       contributedFountainIds: List<String>.from(data['contributedFountainIds'] ?? []),
       validatedFountainIds: List<String>.from(data['validatedFountainIds'] ?? []),
@@ -51,13 +56,14 @@ class UserModel {
     );
   }
 
-  Map<String, dynamic> toFirestore() {
+  Map<String, dynamic> toMap() {
     return {
+      'id': id,
       'email': email,
       'displayName': displayName,
       'photoURL': photoURL,
-      'createdAt': Timestamp.fromDate(createdAt),
-      'lastLoginAt': Timestamp.fromDate(lastLoginAt),
+      'createdAt': createdAt.toIso8601String(),
+      'lastLoginAt': lastLoginAt.toIso8601String(),
       'favoriteFountainIds': favoriteFountainIds,
       'contributedFountainIds': contributedFountainIds,
       'validatedFountainIds': validatedFountainIds,
@@ -174,4 +180,18 @@ class UserModel {
   bool hasFavorited(String fountainId) => favoriteFountainIds.contains(fountainId);
   bool hasContributed(String fountainId) => contributedFountainIds.contains(fountainId);
   bool hasValidated(String fountainId) => validatedFountainIds.contains(fountainId);
+
+  @override
+  String toString() {
+    return 'UserModel(id: $id, email: $email, displayName: $displayName)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is UserModel && other.id == id;
+  }
+
+  @override
+  int get hashCode => id.hashCode;
 }

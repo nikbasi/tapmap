@@ -1,389 +1,258 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:google_sign_in/google_sign_in.dart';
-import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:water_fountain_finder/models/user.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 
 class AuthProvider extends ChangeNotifier {
-  late final FirebaseAuth _auth;
-  late final FirebaseFirestore _firestore;
-  late final GoogleSignIn _googleSignIn;
-  bool _googleSignInAvailable = false;
-
-  User? get currentUser => _auth.currentUser;
   UserModel? _userModel;
-  UserModel? get userModel => _userModel;
-  bool get isAuthenticated => currentUser != null;
-  bool get isLoading => _isLoading;
-  String? get error => _error;
-  bool get googleSignInAvailable => _googleSignInAvailable;
-
   bool _isLoading = false;
   String? _error;
+  bool _isAuthenticated = false;
 
-  // Simple check for Firebase availability
-  bool get isFirebaseAvailable {
-    try {
-      // Try to access a simple Firebase property to check availability
-      _auth.app.name;
-      _firestore.app.name;
-      return true;
-    } catch (e) {
-      print('Firebase not available: $e');
-      return false;
-    }
-  }
-
-  // Refresh Firebase instances if they become available
-  Future<void> refreshFirebaseInstances() async {
-    try {
-      print('Refreshing Firebase instances...');
-      
-      // Try to set up auth state listener again
-      try {
-        _auth.authStateChanges().listen(_onAuthStateChanged);
-        // Initialize current state
-        _onAuthStateChanged(_auth.currentUser);
-        print('Firebase instances refreshed successfully');
-      } catch (e) {
-        print('Error setting up auth state listener after refresh: $e');
-      }
-    } catch (e) {
-      print('Error refreshing Firebase instances: $e');
-    }
-  }
+  UserModel? get userModel => _userModel;
+  bool get isAuthenticated => _isAuthenticated;
+  bool get isLoading => _isLoading;
+  String? get error => _error;
 
   AuthProvider() {
-    try {
-      // Create Firebase instances
-      _auth = FirebaseAuth.instance;
-      _firestore = FirebaseFirestore.instance;
-      print('Firebase instances created successfully');
-    } catch (e) {
-      print('Error creating Firebase instances: $e');
-      // Create fallback instances even if there's an error
-      _auth = FirebaseAuth.instance;
-      _firestore = FirebaseFirestore.instance;
-    }
-    
-    _initializeGoogleSignIn();
-    
-    // Only listen to auth state changes if Firebase is properly initialized
-    try {
-      _auth.authStateChanges().listen(_onAuthStateChanged);
-      // Initialize current state so UI reflects existing session on startup
-      _onAuthStateChanged(_auth.currentUser);
-    } catch (e) {
-      print('Error setting up auth state listener: $e');
-      // Continue without auth state listening
-    }
+    // For now, start with no authentication
+    _isAuthenticated = false;
+    _userModel = null;
   }
 
-  void _initializeGoogleSignIn() {
-    try {
-      _googleSignIn = GoogleSignIn();
-      _googleSignInAvailable = true;
-    } catch (e) {
-      _googleSignInAvailable = false;
-      print('Google Sign-In not available: $e');
-    }
-  }
-
-  void _onAuthStateChanged(User? user) async {
+  // Mock sign in method
+  Future<bool> signInWithEmailAndPassword(String email, String password) async {
     _setLoading(true);
+    _clearError();
+    
     try {
-      if (user != null) {
-        // Ensure we have a minimal user model immediately for UI
-        _userModel ??= UserModel(
-          id: user.uid,
-          email: user.email ?? '',
-          displayName: user.displayName,
-          photoURL: user.photoURL,
-          createdAt: DateTime.now(),
-          lastLoginAt: DateTime.now(),
-          favoriteFountainIds: const [],
-          contributedFountainIds: const [],
-          validatedFountainIds: const [],
-        );
-        notifyListeners();
-
-        await _loadUserData(user.uid);
-      } else {
-        _userModel = null;
-      }
+      // Simulate network delay
+      await Future.delayed(const Duration(seconds: 1));
+      
+      // For now, just create a mock user
+      _userModel = UserModel(
+        id: 'mock_user_${DateTime.now().millisecondsSinceEpoch}',
+        email: email,
+        displayName: email.split('@').first,
+        photoURL: null,
+        createdAt: DateTime.now(),
+        lastLoginAt: DateTime.now(),
+      );
+      
+      _isAuthenticated = true;
       notifyListeners();
+      return true;
+    } catch (e) {
+      _setError('Sign in failed: $e');
+      return false;
     } finally {
       _setLoading(false);
     }
   }
 
-  Future<void> _loadUserData(String uid) async {
+  // Mock sign up method
+  Future<bool> signUpWithEmailAndPassword(String email, String password, String displayName) async {
+    _setLoading(true);
+    _clearError();
+    
     try {
-      print('Loading user data from Firestore for UID: $uid');
+      // Simulate network delay
+      await Future.delayed(const Duration(seconds: 1));
       
-      // Check if Firestore is available
-      if (!isFirebaseAvailable) {
-        print('Firebase not available, skipping user data load');
-        return;
-      }
-      
-      final doc = await _firestore.collection('users').doc(uid).get();
-      if (doc.exists) {
-        print('User document exists, parsing data...');
-        _userModel = UserModel.fromFirestore(doc);
-        print('User data parsed successfully');
-      } else {
-        print('User document does not exist, creating new one...');
-        // Create new user document if it doesn't exist
-        await _createUserDocument(uid);
-        print('New user document created');
-      }
-    } catch (e) {
-      print('Error loading user data: $e');
-      _error = 'Failed to load user data: $e';
-      notifyListeners();
-    }
-  }
-
-  Future<void> _createUserDocument(String uid) async {
-    try {
-      final user = _auth.currentUser;
-      if (user != null) {
-        // Check if Firestore is available
-        if (!isFirebaseAvailable) {
-          print('Firebase not available, skipping user document creation');
-          return;
-        }
-        
-        final userData = UserModel(
-          id: uid,
-          email: user.email ?? '',
-          displayName: user.displayName,
-          photoURL: user.photoURL,
-          createdAt: DateTime.now(),
-          lastLoginAt: DateTime.now(),
-          favoriteFountainIds: [],
-          contributedFountainIds: [],
-          validatedFountainIds: [],
-        );
-
-        await _firestore.collection('users').doc(uid).set(userData.toFirestore());
-        _userModel = userData;
-      }
-    } catch (e) {
-      print('Error creating user document: $e');
-      _error = 'Failed to create user document: $e';
-      notifyListeners();
-    }
-  }
-
-  Future<bool> signInWithGoogle() async {
-    if (!_googleSignInAvailable) {
-      _setError('Google Sign-In is not available. Please configure it in Firebase Console first.');
-      return false;
-    }
-
-    try {
-      _setLoading(true);
-      _clearError();
-
-      // Check if Firebase Auth is available
-      if (!isFirebaseAvailable) {
-        _setError('Firebase not properly configured');
-        _setLoading(false);
-        return false;
-      }
-
-      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
-      if (googleUser == null) {
-        _setLoading(false);
-        return false;
-      }
-
-      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
-      final credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
-      );
-
-      final userCred = await _auth.signInWithCredential(credential);
-
-      // Seed minimal model for immediate UI, then load Firestore data
-      final user = userCred.user;
-      if (user != null) {
-        _userModel = UserModel(
-          id: user.uid,
-          email: user.email ?? '',
-          displayName: user.displayName,
-          photoURL: user.photoURL,
-          createdAt: DateTime.now(),
-          lastLoginAt: DateTime.now(),
-          favoriteFountainIds: const [],
-          contributedFountainIds: const [],
-          validatedFountainIds: const [],
-        );
-        notifyListeners();
-        await _loadUserData(user.uid);
-      }
-
-      _setLoading(false);
-      return true;
-    } catch (e) {
-      _setError('Google sign-in failed: $e');
-      _setLoading(false);
-      return false;
-    }
-  }
-
-  Future<bool> signInWithApple() async {
-    try {
-      _setLoading(true);
-      _clearError();
-
-      final credential = await SignInWithApple.getAppleIDCredential(
-        scopes: [
-          AppleIDAuthorizationScopes.email,
-          AppleIDAuthorizationScopes.fullName,
-        ],
-      );
-
-      final oauthCredential = OAuthProvider('apple.com').credential(
-        idToken: credential.identityToken,
-        accessToken: credential.authorizationCode,
-      );
-
-      await _auth.signInWithCredential(oauthCredential);
-      _setLoading(false);
-      return true;
-    } catch (e) {
-      _setError('Apple sign-in failed: $e');
-      _setLoading(false);
-      return false;
-    }
-  }
-
-  Future<bool> signInWithEmailAndPassword(String email, String password) async {
-    try {
-      _setLoading(true);
-      _clearError();
-
-      await _auth.signInWithEmailAndPassword(email: email, password: password);
-      _setLoading(false);
-      return true;
-    } catch (e) {
-      _setError('Email sign-in failed: $e');
-      _setLoading(false);
-      return false;
-    }
-  }
-
-  Future<bool> createUserWithEmailAndPassword(String email, String password, String displayName) async {
-    try {
-      _setLoading(true);
-      _clearError();
-
-      final userCredential = await _auth.createUserWithEmailAndPassword(
+      // Create a mock user
+      _userModel = UserModel(
+        id: 'mock_user_${DateTime.now().millisecondsSinceEpoch}',
         email: email,
-        password: password,
+        displayName: displayName,
+        photoURL: null,
+        createdAt: DateTime.now(),
+        lastLoginAt: DateTime.now(),
       );
-
-      // Update display name
-      await userCredential.user?.updateDisplayName(displayName);
       
-      _setLoading(false);
+      _isAuthenticated = true;
+      notifyListeners();
       return true;
     } catch (e) {
-      _setError('Account creation failed: $e');
-      _setLoading(false);
+      _setError('Sign up failed: $e');
       return false;
+    } finally {
+      _setLoading(false);
     }
   }
 
+  // Mock sign out method
   Future<void> signOut() async {
+    _setLoading(true);
+    
     try {
-      _setLoading(true);
-      await Future.wait([
-        _auth.signOut(),
-        _googleSignIn.signOut(),
-      ]);
+      // Simulate network delay
+      await Future.delayed(const Duration(milliseconds: 500));
+      
       _userModel = null;
-      _setLoading(false);
+      _isAuthenticated = false;
+      notifyListeners();
     } catch (e) {
-      _setError('Sign-out failed: $e');
+      _setError('Sign out failed: $e');
+    } finally {
       _setLoading(false);
     }
   }
 
-  Future<void> resetPassword(String email) async {
+  // Mock password reset method
+  Future<bool> resetPassword(String email) async {
+    _setLoading(true);
+    _clearError();
+    
     try {
-      _setLoading(true);
-      _clearError();
-
-      await _auth.sendPasswordResetEmail(email: email);
-      _setLoading(false);
+      // Simulate network delay
+      await Future.delayed(const Duration(seconds: 1));
+      
+      // In a real app, this would send a password reset email
+      print('Password reset email would be sent to: $email');
+      return true;
     } catch (e) {
       _setError('Password reset failed: $e');
+      return false;
+    } finally {
       _setLoading(false);
     }
   }
 
-  Future<void> updateUserProfile({String? displayName, String? photoURL}) async {
+  // Mock Google sign in method
+  Future<bool> signInWithGoogle() async {
+    _setLoading(true);
+    _clearError();
+    
     try {
-      _setLoading(true);
-      _clearError();
-
-      if (displayName != null) {
-        await currentUser?.updateDisplayName(displayName);
-      }
-      if (photoURL != null) {
-        await currentUser?.updatePhotoURL(photoURL);
-      }
-
-      // Update Firestore document
-      if (_userModel != null) {
-        final updatedUser = _userModel!.copyWith(
-          displayName: displayName ?? _userModel!.displayName,
-          photoURL: photoURL ?? _userModel!.photoURL,
-        );
-        
-        await _firestore.collection('users').doc(currentUser!.uid).update({
-          'displayName': updatedUser.displayName,
-          'photoURL': updatedUser.photoURL,
-        });
-        
-        _userModel = updatedUser;
-      }
-
+      // Simulate network delay
+      await Future.delayed(const Duration(seconds: 1));
+      
+      // Create a mock Google user
+      _userModel = UserModel(
+        id: 'google_user_${DateTime.now().millisecondsSinceEpoch}',
+        email: 'google.user@example.com',
+        displayName: 'Google User',
+        photoURL: 'https://via.placeholder.com/150',
+        createdAt: DateTime.now(),
+        lastLoginAt: DateTime.now(),
+      );
+      
+      _isAuthenticated = true;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _setError('Google sign in failed: $e');
+      return false;
+    } finally {
       _setLoading(false);
+    }
+  }
+
+  // Mock Apple sign in method
+  Future<bool> signInWithApple() async {
+    _setLoading(true);
+    _clearError();
+    
+    try {
+      // Simulate network delay
+      await Future.delayed(const Duration(seconds: 1));
+      
+      // Create a mock Apple user
+      _userModel = UserModel(
+        id: 'apple_user_${DateTime.now().millisecondsSinceEpoch}',
+        email: 'apple.user@example.com',
+        displayName: 'Apple User',
+        photoURL: null,
+        createdAt: DateTime.now(),
+        lastLoginAt: DateTime.now(),
+      );
+      
+      _isAuthenticated = true;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _setError('Apple sign in failed: $e');
+      return false;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  // Update user profile
+  Future<bool> updateProfile({String? displayName, String? photoURL}) async {
+    if (_userModel == null) return false;
+    
+    _setLoading(true);
+    _clearError();
+    
+    try {
+      // Simulate network delay
+      await Future.delayed(const Duration(milliseconds: 500));
+      
+      _userModel = _userModel!.copyWith(
+        displayName: displayName ?? _userModel!.displayName,
+        photoURL: photoURL ?? _userModel!.photoURL,
+      );
+      
+      notifyListeners();
+      return true;
     } catch (e) {
       _setError('Profile update failed: $e');
+      return false;
+    } finally {
       _setLoading(false);
     }
   }
 
-  Future<void> updateUserPreferences(Map<String, dynamic> preferences) async {
-    try {
-      if (_userModel != null && currentUser != null) {
-        final updatedUser = _userModel!;
-        for (final entry in preferences.entries) {
-          updatedUser.updatePreference(entry.key, entry.value);
-        }
-        
-        await _firestore.collection('users').doc(currentUser!.uid).update({
-          'preferences': updatedUser.preferences,
-        });
-        
-        _userModel = updatedUser;
-        notifyListeners();
-      }
-    } catch (e) {
-      _setError('Preferences update failed: $e');
-      notifyListeners();
-    }
+  // Check if user is signed in
+  bool get isSignedIn => _isAuthenticated && _userModel != null;
+
+  // Get current user ID
+  String? get currentUserId => _userModel?.id;
+
+  // Get current user email
+  String? get currentUserEmail => _userModel?.email;
+
+  // Get current user display name
+  String? get currentUserDisplayName => _userModel?.displayName;
+
+  // Get current user photo URL
+  String? get currentUserPhotoURL => _userModel?.photoURL;
+
+  // Mock createUserWithEmailAndPassword method
+  Future<bool> createUserWithEmailAndPassword(String email, String password, String displayName) async {
+    return await signUpWithEmailAndPassword(email, password, displayName);
   }
 
+  // Mock currentUser getter for compatibility
+  Map<String, dynamic>? get currentUser {
+    if (_userModel == null) return null;
+    return {
+      'uid': _userModel!.id,
+      'email': _userModel!.email,
+      'displayName': _userModel!.displayName,
+      'photoURL': _userModel!.photoURL,
+    };
+  }
+
+  // Mock googleSignInAvailable getter
+  bool get googleSignInAvailable => true;
+
+  // Mock debugPrintUserData method
+  void debugPrintUserData() {
+    print('=== USER DATA DEBUG ===');
+    print('Is Authenticated: $_isAuthenticated');
+    print('User Model: $_userModel');
+    if (_userModel != null) {
+      print('Email: ${_userModel!.email}');
+      print('Display Name: ${_userModel!.displayName}');
+      print('Favorites: ${_userModel!.favoriteFountainIds}');
+      print('Contributions: ${_userModel!.contributedFountainIds}');
+      print('Validations: ${_userModel!.validatedFountainIds}');
+      print('Contribution Score: ${_userModel!.contributionScore}');
+    }
+    print('=======================');
+  }
+
+  // Private helper methods
   void _setLoading(bool loading) {
     _isLoading = loading;
     notifyListeners();
@@ -397,38 +266,5 @@ class AuthProvider extends ChangeNotifier {
   void _clearError() {
     _error = null;
     notifyListeners();
-  }
-
-  void clearError() {
-    _clearError();
-  }
-
-  // Debug method to print current user data
-  void debugPrintUserData() {
-    print('=== USER DATA DEBUG ===');
-    print('Is Authenticated: $isAuthenticated');
-    print('Current User UID: ${currentUser?.uid}');
-    print('User Model: $_userModel');
-    if (_userModel != null) {
-      print('Email: ${_userModel!.email}');
-      print('Display Name: ${_userModel!.displayName}');
-      print('Favorites: ${_userModel!.favoriteFountainIds}');
-      print('Contributions: ${_userModel!.contributedFountainIds}');
-      print('Validations: ${_userModel!.validatedFountainIds}');
-      print('Contribution Score: ${_userModel!.contributionScore}');
-    }
-    print('=======================');
-  }
-
-  // Method to refresh user data from Firestore
-  Future<void> refreshUserData() async {
-    print('refreshUserData called');
-    if (currentUser != null) {
-      print('Loading user data for: ${currentUser!.uid}');
-      await _loadUserData(currentUser!.uid);
-      print('User data loaded successfully');
-    } else {
-      print('No current user found');
-    }
   }
 }

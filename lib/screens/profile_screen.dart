@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import 'package:water_fountain_finder/providers/auth_provider.dart';
-import 'package:water_fountain_finder/providers/fountain_provider.dart';
+import 'package:water_fountain_finder/providers/postgres_fountain_provider.dart';
 import 'package:water_fountain_finder/models/user.dart';
 import 'package:water_fountain_finder/utils/constants.dart';
-import 'package:water_fountain_finder/widgets/database_viewer.dart';
+
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -525,7 +525,7 @@ class ProfileScreen extends StatelessWidget {
               Expanded(
                 child: OutlinedButton.icon(
                   onPressed: () async {
-                    final fountainProvider = Provider.of<FountainProvider>(context, listen: false);
+                    final fountainProvider = Provider.of<PostgresFountainProvider>(context, listen: false);
                     await fountainProvider.refreshData();
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
@@ -553,7 +553,10 @@ class ProfileScreen extends StatelessWidget {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => const DatabaseViewer(),
+                    builder: (context) => Scaffold(
+                      appBar: AppBar(title: const Text('Database Viewer')),
+                      body: const Center(child: Text('Database viewer removed - using PostgreSQL now')),
+                    ),
                   ),
                 );
               },

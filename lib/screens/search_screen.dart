@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:water_fountain_finder/providers/fountain_provider.dart';
+import 'package:water_fountain_finder/providers/postgres_fountain_provider.dart';
 import 'package:water_fountain_finder/models/fountain.dart';
 import 'package:water_fountain_finder/utils/constants.dart';
 import 'package:water_fountain_finder/widgets/fountain_list_item.dart';
@@ -27,12 +27,12 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   void _onSearchChanged(String query) {
-    final fountainProvider = Provider.of<FountainProvider>(context, listen: false);
+    final fountainProvider = Provider.of<PostgresFountainProvider>(context, listen: false);
     fountainProvider.searchFountains(query);
   }
 
   void _applyFilters() {
-    final fountainProvider = Provider.of<FountainProvider>(context, listen: false);
+    final fountainProvider = Provider.of<PostgresFountainProvider>(context, listen: false);
     final filters = <String, dynamic>{};
 
     if (_selectedType != null) {
@@ -59,7 +59,7 @@ class _SearchScreenState extends State<SearchScreen> {
       _selectedAccessibility = null;
     });
 
-    final fountainProvider = Provider.of<FountainProvider>(context, listen: false);
+    final fountainProvider = Provider.of<PostgresFountainProvider>(context, listen: false);
     fountainProvider.clearFilters();
   }
 
@@ -129,7 +129,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
           // Results
           Expanded(
-            child: Consumer<FountainProvider>(
+            child: Consumer<PostgresFountainProvider>(
               builder: (context, fountainProvider, child) {
                 if (fountainProvider.isLoading) {
                   return const Center(
@@ -205,7 +205,7 @@ class _SearchScreenState extends State<SearchScreen> {
                       return Padding(
                         padding: const EdgeInsets.only(bottom: AppSizes.paddingM),
                         child: FountainListItem(
-                          fountain: fountains[index],
+                          fountain: fountains[index].toFountain(),
                           onTap: () {
                             // TODO: Navigate to fountain details
                           },

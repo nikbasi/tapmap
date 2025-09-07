@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:water_fountain_finder/models/local_fountain.dart';
+import 'package:water_fountain_finder/models/postgres_fountain.dart';
+import 'package:water_fountain_finder/models/fountain.dart';
 import 'package:water_fountain_finder/utils/constants.dart';
 
 class FountainInfoCard extends StatelessWidget {
-  final LocalFountain fountain;
+  final PostgresFountain fountain;
   final VoidCallback onClose;
 
   const FountainInfoCard({
@@ -249,57 +250,57 @@ class FountainInfoCard extends StatelessWidget {
     );
   }
 
-  IconData _getFountainIcon(LocalFountainType type) {
+  IconData _getFountainIcon(FountainType type) {
     switch (type) {
-      case LocalFountainType.fountain:
+      case FountainType.fountain:
         return Icons.water_drop;
-      case LocalFountainType.tap:
+      case FountainType.tap:
         return Icons.tap_and_play;
-      case LocalFountainType.refillStation:
+      case FountainType.refillStation:
         return Icons.local_drink;
     }
   }
 
-  Color _getFountainColor(LocalFountainType type) {
+  Color _getFountainColor(FountainType type) {
     switch (type) {
-      case LocalFountainType.fountain:
+      case FountainType.fountain:
         return AppColors.fountainBlue;
-      case LocalFountainType.tap:
+      case FountainType.tap:
         return AppColors.tapBlue;
-      case LocalFountainType.refillStation:
+      case FountainType.refillStation:
         return AppColors.waterBlue;
     }
   }
 
-  Color _getWaterQualityColor(LocalWaterQuality quality) {
+  Color _getWaterQualityColor(WaterQuality quality) {
     switch (quality) {
-      case LocalWaterQuality.potable:
+      case WaterQuality.potable:
         return AppColors.success;
-      case LocalWaterQuality.nonPotable:
+      case WaterQuality.nonPotable:
         return AppColors.warning;
-      case LocalWaterQuality.unknown:
+      case WaterQuality.unknown:
         return AppColors.info;
     }
   }
 
-  Color _getAccessibilityColor(LocalAccessibility accessibility) {
+  Color _getAccessibilityColor(Accessibility accessibility) {
     switch (accessibility) {
-      case LocalAccessibility.public:
+      case Accessibility.public:
         return AppColors.success;
-      case LocalAccessibility.restricted:
+      case Accessibility.restricted:
         return AppColors.warning;
-      case LocalAccessibility.private:
+      case Accessibility.private:
         return AppColors.error;
     }
   }
 
-  Color _getStatusColor(LocalFountainStatus status) {
+  Color _getStatusColor(FountainStatus status) {
     switch (status) {
-      case LocalFountainStatus.active:
+      case FountainStatus.active:
         return AppColors.success;
-      case LocalFountainStatus.inactive:
+      case FountainStatus.inactive:
         return AppColors.error;
-      case LocalFountainStatus.maintenance:
+      case FountainStatus.maintenance:
         return AppColors.warning;
     }
   }
