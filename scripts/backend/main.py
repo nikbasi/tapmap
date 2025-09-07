@@ -10,6 +10,7 @@ import logging
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 import asyncio
+from dotenv import load_dotenv
 
 from fastapi import FastAPI, HTTPException, Query, Depends, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
@@ -19,6 +20,9 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 import geohash
 
+# Load environment variables from .env file
+load_dotenv()
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -26,10 +30,10 @@ logger = logging.getLogger(__name__)
 # Database configuration
 DB_CONFIG = {
     'host': os.getenv('DB_HOST', 'localhost'),
-    'database': os.getenv('DB_NAME', 'fountain_db'),
-    'user': os.getenv('DB_USER', 'fountain_user'),
-    'password': os.getenv('DB_PASSWORD', 'fountain_password'),
-    'port': os.getenv('DB_PORT', '5432')
+    'database': os.getenv('DB_NAME', 'tapmap_db'),
+    'user': os.getenv('DB_USER', 'tapmap_user'),
+    'password': os.getenv('DB_PASSWORD', 'fountains.2025'),
+    'port': os.getenv('DB_PORT', '5433')  # SSH tunnel port
 }
 
 # Initialize FastAPI app
@@ -42,7 +46,13 @@ app = FastAPI(
 # CORS middleware for Flutter app
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
+    allow_origins=[
+        "http://localhost:60199",  # Flutter Web port
+        "http://127.0.0.1:60199",  # Alternative localhost
+        "http://localhost:3000",   # Common dev port
+        "http://127.0.0.1:3000",   # Alternative
+        "*"  # Keep wildcard for now
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -94,16 +104,19 @@ class ViewportQuery(BaseModel):
     east: float
     west: float
     zoom_level: int = Field(..., ge=1, le=20)
-    limit: int = 1000
+    limit: int = 100  # Reduced from 1000 to improve performance
 
 # Database connection helper
 def get_db_connection():
     """Get database connection with proper error handling"""
     try:
+        logger.info(f"Attempting database connection with config: host={DB_CONFIG['host']}, port={DB_CONFIG['port']}, database={DB_CONFIG['database']}, user={DB_CONFIG['user']}")
         conn = psycopg2.connect(**DB_CONFIG)
+        logger.info("Database connection successful")
         return conn
     except psycopg2.Error as e:
         logger.error(f"Database connection failed: {e}")
+        logger.error(f"Connection details: {DB_CONFIG}")
         raise HTTPException(status_code=500, detail="Database connection failed")
 
 # Geohash utilities
@@ -138,12 +151,12 @@ def calculate_optimal_precision(zoom_level: int) -> int:
 
 def get_geohash_prefixes_for_viewport(north: float, south: float, east: float, west: float, precision: int) -> List[str]:
     """
-    Get all geohash prefixes that intersect with the viewport at given precision.
-    This ensures we don't miss fountains at viewport boundaries.
+    Get geohash prefixes that cover the viewport at given precision.
+    Simplified to reduce complexity and improve performance.
     """
     prefixes = set()
     
-    # Calculate geohashes for corners and add neighboring ones
+    # Calculate geohashes for corners only (no neighbors for now)
     corners = [
         (north, west), (north, east),
         (south, west), (south, east)
@@ -152,19 +165,193 @@ def get_geohash_prefixes_for_viewport(north: float, south: float, east: float, w
     for lat, lon in corners:
         gh = geohash.encode(lat, lon, precision=precision)
         prefixes.add(gh)
-        
-        # Add neighboring geohashes to ensure coverage
-        neighbors = geohash.neighbors(gh)
-        for neighbor in neighbors:
-            prefixes.add(neighbor)
     
-    return list(prefixes)
+    # Limit to maximum 16 prefixes to prevent performance issues
+    prefix_list = list(prefixes)
+    if len(prefix_list) > 16:
+        prefix_list = prefix_list[:16]
+    
+    return prefix_list
 
 # API Endpoints
 @app.get("/")
 async def root():
     """Health check endpoint"""
     return {"message": "Fountain Map API", "status": "healthy"}
+
+@app.get("/health")
+async def health_check():
+    """Simple health check that doesn't require database access"""
+    return {"status": "healthy", "timestamp": datetime.now().isoformat()}
+
+@app.get("/test-flutter")
+async def test_flutter_connection():
+    """Test endpoint specifically for Flutter connectivity"""
+    return {
+        "message": "Flutter connection test successful!",
+        "timestamp": datetime.now().isoformat(),
+        "cors_origins": ["http://localhost:60199", "http://127.0.0.1:60199"],
+        "status": "connected"
+    }
+
+@app.get("/test-fountain")
+async def test_fountain_data():
+    """Test endpoint that returns a single, clean fountain for Flutter parsing"""
+    return {
+        "id": "test_001",
+        "name": "Test Fountain",
+        "description": "A test fountain for debugging",
+        "location": {
+            "latitude": 40.7128,
+            "longitude": -74.0060
+        },
+        "type": "fountain",
+        "status": "active",
+        "water_quality": "potable",
+        "accessibility": "public",
+        "added_by": "test_user",
+        "added_date": "2024-01-01T00:00:00",
+        "validations": [],
+        "photos": [],
+        "tags": ["test", "debug"],
+        "osm_data": None,
+        "geohash": "dr5ru",
+        "created_at": "2024-01-01T00:00:00",
+        "updated_at": "2024-01-01T00:00:00"
+    }
+
+@app.get("/debug-fountain")
+async def debug_fountain_data():
+    """Debug endpoint that returns raw database data to identify null fields"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # Get just one fountain to inspect
+        cursor.execute("SELECT * FROM fountains LIMIT 1")
+        result = cursor.fetchone()
+        
+        cursor.close()
+        conn.close()
+        
+        if result:
+            # Convert to dict and show all fields
+            raw_data = dict(result)
+            logger.info(f"Raw fountain data: {raw_data}")
+            
+            # Check for null values in all fields
+            null_fields = []
+            for field, value in raw_data.items():
+                if value is None:
+                    null_fields.append(field)
+            
+            return {
+                "raw_data": raw_data,
+                "null_fields": null_fields,
+                "message": "Raw database data for debugging"
+            }
+        else:
+            return {"message": "No fountains found in database"}
+            
+    except Exception as e:
+        logger.error(f"Error in debug endpoint: {e}")
+        return {"error": str(e)}
+
+@app.get("/test-serialization")
+async def test_serialization():
+    """Test endpoint to verify API can serialize fountain data properly"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # Get one fountain and process it like the viewport endpoint
+        cursor.execute("SELECT * FROM fountains LIMIT 1")
+        result = cursor.fetchone()
+        
+        cursor.close()
+        conn.close()
+        
+        if result:
+            # Process the data exactly like the viewport endpoint
+            fountain_data = dict(result)
+            fountain_data['location'] = {
+                'latitude': float(result['latitude']),
+                'longitude': float(result['longitude'])
+            }
+            
+            # Convert any Decimal fields to float
+            for key, value in fountain_data.items():
+                if hasattr(value, '__class__') and value.__class__.__name__ == 'Decimal':
+                    fountain_data[key] = float(value)
+            
+            # Try to create the Pydantic model
+            try:
+                fountain = FountainResponse(**fountain_data)
+                return {
+                    "success": True,
+                    "message": "Fountain data serialized successfully",
+                    "fountain": fountain.dict(),
+                    "types": {k: type(v).__name__ for k, v in fountain.dict().items()}
+                }
+            except Exception as parse_error:
+                return {
+                    "success": False,
+                    "message": f"Failed to parse fountain: {parse_error}",
+                    "raw_data": fountain_data,
+                    "error": str(parse_error)
+                }
+        else:
+            return {"message": "No fountains found in database"}
+            
+    except Exception as e:
+        logger.error(f"Error in test serialization endpoint: {e}")
+        return {"error": str(e)}
+
+@app.get("/fountains")
+async def get_all_fountains(
+    limit: int = Query(1000, ge=1, le=10000),
+    offset: int = Query(0, ge=0)
+) -> List[FountainResponse]:
+    """
+    Get all fountains with pagination.
+    """
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        
+        query = """
+        SELECT * FROM fountains 
+        WHERE latitude IS NOT NULL AND longitude IS NOT NULL
+        ORDER BY id
+        LIMIT %s OFFSET %s
+        """
+        
+        cursor.execute(query, (limit, offset))
+        results = cursor.fetchall()
+        
+        # Convert to Pydantic models, filtering out null coordinates
+        fountains = []
+        for row in results:
+            # Skip fountains with null coordinates
+            if row['latitude'] is None or row['longitude'] is None:
+                logger.warning(f"Skipping fountain {row.get('id', 'unknown')} with null coordinates")
+                continue
+                
+            fountain_data = dict(row)
+            fountain_data['location'] = {
+                'latitude': float(row['latitude']),
+                'longitude': float(row['longitude'])
+            }
+            fountains.append(FountainResponse(**fountain_data))
+        
+        cursor.close()
+        conn.close()
+        
+        return fountains
+        
+    except Exception as e:
+        logger.error(f"Error querying all fountains: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.get("/fountains/geohash/{geohash_prefix}")
 async def get_fountains_by_geohash(
@@ -190,7 +377,8 @@ async def get_fountains_by_geohash(
         
         query = f"""
         SELECT * FROM fountains 
-        WHERE {precision_column} = %s
+        WHERE {precision_column} = %s 
+        AND latitude IS NOT NULL AND longitude IS NOT NULL
         ORDER BY id
         LIMIT %s OFFSET %s
         """
@@ -198,9 +386,14 @@ async def get_fountains_by_geohash(
         cursor.execute(query, (geohash_prefix, limit, offset))
         results = cursor.fetchall()
         
-        # Convert to Pydantic models
+        # Convert to Pydantic models, filtering out null coordinates
         fountains = []
         for row in results:
+            # Skip fountains with null coordinates
+            if row['latitude'] is None or row['longitude'] is None:
+                logger.warning(f"Skipping fountain {row.get('id', 'unknown')} with null coordinates")
+                continue
+                
             fountain_data = dict(row)
             fountain_data['location'] = {
                 'latitude': float(row['latitude']),
@@ -224,13 +417,18 @@ async def get_fountains_by_viewport(query: ViewportQuery) -> List[FountainRespon
     This endpoint automatically selects the best precision for smooth zoom transitions.
     """
     try:
+        start_time = datetime.now()
+        logger.info(f"Viewport query started: zoom={query.zoom_level}, limit={query.limit}")
+        
         # Calculate optimal precision for the zoom level
         precision = calculate_optimal_precision(query.zoom_level)
+        logger.info(f"Calculated precision: {precision}")
         
         # Get geohash prefixes that cover the viewport
         geohash_prefixes = get_geohash_prefixes_for_viewport(
             query.north, query.south, query.east, query.west, precision
         )
+        logger.info(f"Generated {len(geohash_prefixes)} geohash prefixes")
         
         if not geohash_prefixes:
             return []
@@ -245,25 +443,56 @@ async def get_fountains_by_viewport(query: ViewportQuery) -> List[FountainRespon
         query_sql = f"""
         SELECT * FROM fountains 
         WHERE {precision_column} IN ({placeholders})
+        AND latitude IS NOT NULL AND longitude IS NOT NULL
         ORDER BY id
         LIMIT %s
         """
         
+        logger.info(f"Executing database query with {len(geohash_prefixes)} prefixes")
         cursor.execute(query_sql, geohash_prefixes + [query.limit])
         results = cursor.fetchall()
+        logger.info(f"Database query returned {len(results)} rows")
         
-        # Convert to Pydantic models
+        # Convert to Pydantic models, filtering out null coordinates
         fountains = []
         for row in results:
+            # Skip fountains with null coordinates
+            if row['latitude'] is None or row['longitude'] is None:
+                logger.warning(f"Skipping fountain {row.get('id', 'unknown')} with null coordinates")
+                continue
+            
             fountain_data = dict(row)
+            
+            # Ensure all numeric fields are properly converted
             fountain_data['location'] = {
                 'latitude': float(row['latitude']),
                 'longitude': float(row['longitude'])
             }
-            fountains.append(FountainResponse(**fountain_data))
+            
+            # Convert any Decimal fields to float to prevent serialization issues
+            for key, value in fountain_data.items():
+                if hasattr(value, '__class__') and value.__class__.__name__ == 'Decimal':
+                    fountain_data[key] = float(value)
+            
+            # Check for other null numeric fields that might cause issues
+            numeric_fields = ['added_date', 'created_at', 'updated_at']
+            for field in numeric_fields:
+                if field in fountain_data and fountain_data[field] is None:
+                    fountain_data[field] = datetime.now()
+            
+            try:
+                fountain = FountainResponse(**fountain_data)
+                fountains.append(fountain)
+            except Exception as parse_error:
+                logger.error(f"Failed to parse fountain {row.get('id', 'unknown')}: {parse_error}")
+                logger.error(f"Fountain data: {fountain_data}")
+                continue
         
         cursor.close()
         conn.close()
+        
+        elapsed = (datetime.now() - start_time).total_seconds()
+        logger.info(f"Viewport query completed in {elapsed:.2f}s, returning {len(fountains)} fountains")
         
         return fountains
         
@@ -351,6 +580,7 @@ async def search_fountains(
         search_query = """
         SELECT * FROM fountains 
         WHERE to_tsvector('english', name || ' ' || COALESCE(description, '')) @@ plainto_tsquery('english', %s)
+        AND latitude IS NOT NULL AND longitude IS NOT NULL
         ORDER BY ts_rank(to_tsvector('english', name || ' ' || COALESCE(description, '')), plainto_tsquery('english', %s)) DESC
         LIMIT %s
         """
@@ -358,9 +588,14 @@ async def search_fountains(
         cursor.execute(search_query, (query, query, limit))
         results = cursor.fetchall()
         
-        # Convert to Pydantic models
+        # Convert to Pydantic models, filtering out null coordinates
         fountains = []
         for row in results:
+            # Skip fountains with null coordinates
+            if row['latitude'] is None or row['longitude'] is None:
+                logger.warning(f"Skipping fountain {row.get('id', 'unknown')} with null coordinates")
+                continue
+                
             fountain_data = dict(row)
             fountain_data['location'] = {
                 'latitude': float(row['latitude']),
@@ -386,13 +621,18 @@ async def get_database_stats():
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
         
-        # Get total fountain count
-        cursor.execute("SELECT COUNT(*) as total FROM fountains")
+        # Get total fountain count (only those with valid coordinates)
+        cursor.execute("SELECT COUNT(*) as total FROM fountains WHERE latitude IS NOT NULL AND longitude IS NOT NULL")
         total_count = cursor.fetchone()['total']
         
-        # Get statistics by precision
-        cursor.execute("SELECT * FROM fountain_stats_by_precision")
-        precision_stats = [dict(row) for row in cursor.fetchall()]
+        # Try to get precision stats, but don't fail if the view doesn't exist
+        precision_stats = []
+        try:
+            cursor.execute("SELECT * FROM fountain_stats_by_precision")
+            precision_stats = [dict(row) for row in cursor.fetchall()]
+        except Exception as view_error:
+            logger.warning(f"Could not access fountain_stats_by_precision view: {view_error}")
+            # Return empty precision stats instead of failing
         
         cursor.close()
         conn.close()

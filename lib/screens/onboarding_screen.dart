@@ -275,19 +275,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
         const SizedBox(height: AppSizes.paddingM),
 
-        // Google sign in
+        // Google sign in (use built-in icon to avoid missing asset 404s on web)
         SizedBox(
           width: double.infinity,
           child: OutlinedButton.icon(
             onPressed: authProvider.isLoading ? null : () => _signInWithGoogle(),
-            icon: Image.asset(
-              'assets/icons/google_icon.png',
-              height: 24,
-              errorBuilder: (context, error, stackTrace) => const Icon(
-                Icons.g_mobiledata,
-                size: 24,
-                color: Colors.red,
-              ),
+            icon: const Icon(
+              Icons.g_mobiledata,
+              size: 24,
+              color: Colors.red,
             ),
             label: Text(
               authProvider.isLoading ? 'Signing in...' : 'Continue with Google',
