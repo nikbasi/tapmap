@@ -152,25 +152,53 @@ def calculate_optimal_precision(zoom_level: int) -> int:
 def get_geohash_prefixes_for_viewport(north: float, south: float, east: float, west: float, precision: int) -> List[str]:
     """
     Get geohash prefixes that cover the viewport at given precision.
-    Simplified to reduce complexity and improve performance.
+    Sample a small grid across the viewport so we cover the whole area,
+    not just the corners.
     """
+    # Normalize longitude bounds if viewport crosses antimeridian
+    if east < west:
+        east += 360.0
+
+    # Decide grid density based on precision (higher precision => denser grid)
+    # Keep it small to stay performant
+    grid_steps = {
+        1: 2, 2: 3, 3: 3, 4: 4, 5: 4,
+        6: 5, 7: 5, 8: 6, 9: 6, 10: 7
+    }.get(precision, 5)
+
+    lat_step = max((north - south) / max(grid_steps - 1, 1), 0.0001)
+    lon_span = east - west
+    lon_step = max(lon_span / max(grid_steps - 1, 1), 0.0001)
+
     prefixes = set()
-    
-    # Calculate geohashes for corners only (no neighbors for now)
-    corners = [
-        (north, west), (north, east),
-        (south, west), (south, east)
-    ]
-    
-    for lat, lon in corners:
-        gh = geohash.encode(lat, lon, precision=precision)
-        prefixes.add(gh)
-    
-    # Limit to maximum 16 prefixes to prevent performance issues
+
+    for i in range(grid_steps):
+        lat = south + i * lat_step
+        # Clamp to valid range
+        lat = max(min(lat, 90.0), -90.0)
+        for j in range(grid_steps):
+            lon = west + j * lon_step
+            # Wrap back to [-180, 180]
+            if lon > 180.0:
+                lon -= 360.0
+            if lon < -180.0:
+                lon += 360.0
+            gh = geohash.encode(lat, lon, precision=precision)
+            prefixes.add(gh)
+
+    # Always include center geohash
+    center_lat = (north + south) / 2.0
+    center_lon = (west + (lon_span / 2.0))
+    if center_lon > 180.0:
+        center_lon -= 360.0
+    if center_lon < -180.0:
+        center_lon += 360.0
+    prefixes.add(geohash.encode(center_lat, center_lon, precision=precision))
+
+    # Limit to a reasonable maximum to keep the SQL IN() list short
     prefix_list = list(prefixes)
-    if len(prefix_list) > 16:
-        prefix_list = prefix_list[:16]
-    
+    prefix_list = prefix_list[:64]
+
     return prefix_list
 
 # API Endpoints
