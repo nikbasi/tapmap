@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_map_marker_cluster/flutter_map_marker_cluster.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:water_fountain_finder/providers/local_fountain_provider.dart';
+import 'package:water_fountain_finder/providers/postgres_fountain_provider.dart';
 import 'package:water_fountain_finder/providers/location_provider.dart';
-import 'package:water_fountain_finder/models/local_fountain.dart';
+import 'package:water_fountain_finder/models/postgres_fountain.dart';
+import 'package:water_fountain_finder/models/fountain.dart';
 import 'package:water_fountain_finder/utils/constants.dart';
 import 'package:water_fountain_finder/widgets/fountain_info_card.dart';
 
@@ -16,8 +18,8 @@ class MapScreen extends StatefulWidget {
 }
 
 class _MapScreenState extends State<MapScreen> {
-  List<LocalFountain> _visibleFountains = [];
-  LocalFountain? _selectedFountain;
+  List<PostgresFountain> _visibleFountains = [];
+  PostgresFountain? _selectedFountain;
   final List<Marker> _markers = [];
   final MapController _mapController = MapController();
   bool _isSatelliteView = false;
@@ -85,9 +87,7 @@ class _MapScreenState extends State<MapScreen> {
         return;
       }
 
-      print('🗺️ Loading fountains for map bounds: N:${bounds.northEast.latitude}, S:${bounds.southWest.latitude}, E:${bounds.northEast.longitude}, W:${bounds.southWest.longitude}');
-      
-      final fountainProvider = Provider.of<LocalFountainProvider>(context, listen: false);
+      final fountainProvider = Provider.of<PostgresFountainProvider>(context, listen: false);
       
       final result = await fountainProvider.getFountainsInViewport(
         northLat: bounds.northEast.latitude,
@@ -97,7 +97,7 @@ class _MapScreenState extends State<MapScreen> {
         zoomLevel: _mapController.zoom,
       );
       
-      print('📱 Map screen received ${result.length} fountains');
+      print('📱 Received ${result.length} fountains, creating markers...');
       
       if (mounted) {
         setState(() {
@@ -150,20 +150,51 @@ class _MapScreenState extends State<MapScreen> {
         ),
       );
     }
+    
+    print('📱 Created ${_markers.length} markers for ${_visibleFountains.length} fountains');
   }
 
-  IconData _getFountainIcon(LocalFountainType type) {
+  // Build a styled cluster bubble showing the count
+  Widget _buildClusterBubble(int count) {
+    return Container(
+      width: 42,
+      height: 42,
+      decoration: BoxDecoration(
+        color: Colors.blue.shade600,
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.2),
+            blurRadius: 6,
+            offset: const Offset(0, 3),
+          ),
+        ],
+        border: Border.all(color: Colors.white, width: 2),
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        '$count',
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.bold,
+          fontSize: 14,
+        ),
+      ),
+    );
+  }
+
+  IconData _getFountainIcon(FountainType type) {
     switch (type) {
-      case LocalFountainType.fountain:
+      case FountainType.fountain:
         return Icons.water_drop;
-      case LocalFountainType.tap:
+      case FountainType.tap:
         return Icons.tap_and_play;
-      case LocalFountainType.refillStation:
+      case FountainType.refillStation:
         return Icons.local_drink;
     }
   }
 
-  void _showFountainInfo(LocalFountain fountain) {
+  void _showFountainInfo(PostgresFountain fountain) {
     setState(() {
       _selectedFountain = fountain;
     });
@@ -211,7 +242,7 @@ class _MapScreenState extends State<MapScreen> {
               initialCenter: AppConfig.defaultLocation,
               initialZoom: AppConfig.defaultZoom,
               onMapReady: () {
-                print('🗺️ Map is ready');
+                // Map is ready
               },
               onTap: _onMapTap,
               onPositionChanged: _onMapMoved,
@@ -223,7 +254,24 @@ class _MapScreenState extends State<MapScreen> {
                     : AppConfig.streetTileUrl,
                 userAgentPackageName: 'com.example.water_fountain_finder',
               ),
-              MarkerLayer(markers: _markers),
+              MarkerClusterLayerWidget(
+                options: MarkerClusterLayerOptions(
+                  markers: _markers,
+                  maxClusterRadius: 45,
+                  size: const Size(42, 42),
+                  anchor: AnchorPos.align(AnchorAlign.center),
+                  fitBoundsOptions: const FitBoundsOptions(padding: EdgeInsets.all(50)),
+                  builder: (context, markers) => _buildClusterBubble(markers.length),
+                  spiderfyCircleRadius: 40,
+                  spiderfySpiralDistanceMultiplier: 1.0,
+                  circleSpiralSwitchover: 9,
+                  zoomToBoundsOnClick: true,
+                  animationsOptions: const AnimationsOptions(
+                    fitBoundDuration: Duration(milliseconds: 200),
+                    centerMarkerDuration: Duration(milliseconds: 200),
+                  ),
+                ),
+              ),
             ],
           ),
           

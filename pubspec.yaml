@@ -14,14 +14,15 @@ dependencies:
   # State Management
   provider: ^6.1.1
   
-  # Firebase
-  firebase_core: ^3.6.0
-  firebase_auth: ^5.3.1
-  cloud_firestore: ^5.4.1
-  firebase_storage: ^12.3.1
+  # Authentication (keeping for now, can be replaced later)
+  # firebase_core: ^3.6.0
+  # firebase_auth: ^5.3.1
+  # cloud_firestore: ^5.4.1
+  # firebase_storage: ^12.3.1
   
   # Maps & Location
   flutter_map: ^6.1.0
+  flutter_map_marker_cluster: 
   latlong2: ^0.9.0
   geolocator: ^10.1.0
   geocoding: ^2.1.1
@@ -36,6 +37,7 @@ dependencies:
   shared_preferences: ^2.2.2
   permission_handler: ^11.1.0
   image_picker: ^1.0.4
+  flutter_dotenv: ^5.1.0
   
   # OAuth
   google_sign_in: ^6.1.6
@@ -45,6 +47,9 @@ dependencies:
   intl: ^0.18.1
   url_launcher: ^6.2.2
   dart_geohash: ^2.1.0
+  
+  # PostgreSQL
+  postgres: ^2.6.3
 
 dev_dependencies:
   flutter_test:
@@ -59,6 +64,7 @@ flutter:
     - assets/icons/
     - assets/maps/
     - assets/data/
+    - scripts/backend/.env
   
   # fonts:
   #   - family: Roboto
