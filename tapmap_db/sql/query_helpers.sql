@@ -354,7 +354,7 @@ BEGIN
         RETURN QUERY
         SELECT 
             'count'::VARCHAR as result_type,
-            LEFT(f.geohash, precision_level) as geohash_prefix,
+            LEFT(f.geohash, precision_level)::VARCHAR as geohash_prefix,
             COUNT(*)::BIGINT as fountain_count,
             AVG(f.latitude) as center_lat,
             AVG(f.longitude) as center_lng,
