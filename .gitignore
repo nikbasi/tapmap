@@ -40,6 +40,11 @@ tapmap_backup.sql
 *_backup.sql
 *_export.sql
 
+# Large data files - do not commit to git
+tapmap_db/data/*.json
+tapmap_app/python_scripts/data/*.json
+tapmap_app/python_scripts/old_data/*.json
+
 # Flutter/Dart/Pub related
 **/doc/api/
 **/ios/Flutter/.last_build_id
