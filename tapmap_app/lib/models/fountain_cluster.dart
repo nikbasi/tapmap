@@ -12,11 +12,15 @@ class FountainCluster {
   });
 
   factory FountainCluster.fromJson(Map<String, dynamic> json) {
+    // Handle both string and numeric values from database
+    final centerLat = json['center_lat'];
+    final centerLng = json['center_lng'];
+    
     return FountainCluster(
       geohashPrefix: json['geohash_prefix'] ?? '',
       count: (json['fountain_count'] ?? json['count'] ?? 0).toInt(),
-      centerLat: (json['center_lat'] ?? 0.0).toDouble(),
-      centerLng: (json['center_lng'] ?? 0.0).toDouble(),
+      centerLat: centerLat is String ? double.parse(centerLat) : (centerLat ?? 0.0).toDouble(),
+      centerLng: centerLng is String ? double.parse(centerLng) : (centerLng ?? 0.0).toDouble(),
     );
   }
 }
