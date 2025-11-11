@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../models/map_result.dart';
 import '../models/fountain.dart';
 import '../services/fountain_api_service.dart';
@@ -234,6 +235,63 @@ class _FountainMapState extends State<FountainMap> {
     });
   }
 
+  /// Open Google Maps with directions to the fountain location
+  Future<void> _openGoogleMapsDirections(Fountain fountain) async {
+    try {
+      // Get current user location for starting point
+      Position? userPosition;
+      try {
+        userPosition = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.high,
+          ),
+        );
+      } catch (e) {
+        print('Could not get user location: $e');
+        // Continue without user location - Google Maps will use current location
+      }
+
+      final destLat = fountain.latitude;
+      final destLng = fountain.longitude;
+      final name = Uri.encodeComponent(fountain.name);
+      
+      Uri googleMapsUrl;
+      
+      if (userPosition != null) {
+        // Include user location as starting point for directions
+        final originLat = userPosition.latitude;
+        final originLng = userPosition.longitude;
+        googleMapsUrl = Uri.parse(
+          'https://www.google.com/maps/dir/?api=1&origin=$originLat,$originLng&destination=$destLat,$destLng&destination_place_id=$name'
+        );
+      } else {
+        // Fallback: just show destination (Google Maps will use current location)
+        googleMapsUrl = Uri.parse(
+          'https://www.google.com/maps/dir/?api=1&destination=$destLat,$destLng&destination_place_id=$name'
+        );
+      }
+      
+      if (await canLaunchUrl(googleMapsUrl)) {
+        await launchUrl(
+          googleMapsUrl,
+          mode: LaunchMode.externalApplication,
+        );
+      } else {
+        throw Exception('Cannot launch Google Maps URL');
+      }
+    } catch (e) {
+      // Show error message if launch fails
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not open Google Maps: $e'),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
+  }
+
   /// Show fountain details in a bottom sheet
   void _showFountainDetails(Fountain fountain) {
     showModalBottomSheet(
@@ -337,8 +395,8 @@ class _FountainMapState extends State<FountainMap> {
                             Expanded(
                               child: OutlinedButton.icon(
                                 onPressed: () {
-                                  // Open in maps app
-                                  // You can use url_launcher package for this
+                                  _openGoogleMapsDirections(fountain);
+                                  Navigator.pop(context); // Close bottom sheet
                                 },
                                 icon: const Icon(Icons.directions),
                                 label: const Text('Directions'),
