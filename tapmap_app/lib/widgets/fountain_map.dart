@@ -7,6 +7,8 @@ import 'package:geolocator/geolocator.dart';
 import '../models/map_result.dart';
 import '../services/fountain_api_service.dart';
 
+enum MapType { satellite, street }
+
 class FountainMap extends StatefulWidget {
   const FountainMap({super.key});
 
@@ -22,6 +24,7 @@ class _FountainMapState extends State<FountainMap> {
   bool _isLoading = false;
   LatLng _currentCenter = const LatLng(37.7749, -122.4194);
   double _currentZoom = 10.0;
+  MapType _mapType = MapType.satellite; // Default to satellite view
 
   @override
   void initState() {
@@ -204,6 +207,32 @@ class _FountainMapState extends State<FountainMap> {
     });
   }
 
+  /// Get the appropriate tile layer based on current map type
+  TileLayer _getTileLayer() {
+    if (_mapType == MapType.satellite) {
+      // Esri World Imagery - free satellite imagery
+      return TileLayer(
+        urlTemplate: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        userAgentPackageName: 'com.example.tapmap',
+        maxZoom: 19,
+      );
+    } else {
+      // OpenStreetMap for street view
+      return TileLayer(
+        urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+        userAgentPackageName: 'com.example.tapmap',
+        maxZoom: 19,
+      );
+    }
+  }
+
+  /// Toggle between satellite and street map types
+  void _toggleMapType() {
+    setState(() {
+      _mapType = _mapType == MapType.satellite ? MapType.street : MapType.satellite;
+    });
+  }
+
   /// Build cluster marker widget
   Widget _buildClusterMarker(MapResult result) {
     if (result.type != MapResultType.count || result.cluster == null) {
@@ -269,19 +298,18 @@ class _FountainMapState extends State<FountainMap> {
             maxZoom: 18.0,
             onMapEvent: (MapEvent event) {
               // Update current camera state and debounce fountain loading
-              final camera = event.camera;
-              _currentCenter = camera.center;
-              _currentZoom = camera.zoom;
-              _debouncedLoadFountains();
+              // Only update on move/zoom end events
+              if (event is MapEventMoveEnd) {
+                final camera = _mapController.camera;
+                _currentCenter = camera.center;
+                _currentZoom = camera.zoom;
+                _debouncedLoadFountains();
+              }
             },
           ),
           children: [
-            // OpenStreetMap tile layer
-            TileLayer(
-              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-              userAgentPackageName: 'com.example.tapmap',
-              maxZoom: 19,
-            ),
+            // Dynamic tile layer (satellite or street)
+            _getTileLayer(),
             // Markers layer
             MarkerLayer(
               markers: _mapResults.map((result) {
@@ -322,6 +350,18 @@ class _FountainMapState extends State<FountainMap> {
               child: CircularProgressIndicator(),
             ),
           ),
+        // Map type toggle button
+        Positioned(
+          top: 20,
+          right: 20,
+          child: FloatingActionButton.small(
+            onPressed: _toggleMapType,
+            tooltip: _mapType == MapType.satellite ? 'Switch to Street View' : 'Switch to Satellite View',
+            child: Icon(
+              _mapType == MapType.satellite ? Icons.map : Icons.satellite,
+            ),
+          ),
+        ),
       ],
     );
   }
