@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:geolocator/geolocator.dart';
 import '../models/map_result.dart';
 import '../services/fountain_api_service.dart';
 
@@ -25,10 +26,75 @@ class _FountainMapState extends State<FountainMap> {
   @override
   void initState() {
     super.initState();
-    // Load initial data after a short delay
-    Future.delayed(const Duration(milliseconds: 500), () {
-      _loadFountainsForVisibleArea();
-    });
+    // Request location and center map on user location
+    _requestLocationAndCenter();
+  }
+
+  /// Request location permission and center map on user's location
+  Future<void> _requestLocationAndCenter() async {
+    // Check if location services are enabled
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      print('Location services are disabled.');
+      // Load fountains for default location
+      Future.delayed(const Duration(milliseconds: 500), () {
+        _loadFountainsForVisibleArea();
+      });
+      return;
+    }
+
+    // Check location permission
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        print('Location permissions are denied');
+        // Load fountains for default location
+        Future.delayed(const Duration(milliseconds: 500), () {
+          _loadFountainsForVisibleArea();
+        });
+        return;
+      }
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      print('Location permissions are permanently denied');
+      // Load fountains for default location
+      Future.delayed(const Duration(milliseconds: 500), () {
+        _loadFountainsForVisibleArea();
+      });
+      return;
+    }
+
+    // Get current position
+    try {
+      Position position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
+      );
+
+      if (mounted) {
+        setState(() {
+          _currentCenter = LatLng(position.latitude, position.longitude);
+          _currentZoom = 14.0; // Zoom in closer when showing user location
+        });
+
+        // Move map to user location
+        _mapController.move(_currentCenter, _currentZoom);
+
+        // Load fountains for the new location
+        Future.delayed(const Duration(milliseconds: 500), () {
+          _loadFountainsForVisibleArea();
+        });
+      }
+    } catch (e) {
+      print('Error getting location: $e');
+      // Load fountains for default location
+      Future.delayed(const Duration(milliseconds: 500), () {
+        _loadFountainsForVisibleArea();
+      });
+    }
   }
 
   @override
