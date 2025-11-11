@@ -293,7 +293,11 @@ CREATE OR REPLACE FUNCTION get_fountains_for_map_view(
     max_lat DECIMAL,
     min_lng DECIMAL,
     max_lng DECIMAL,
-    return_counts BOOLEAN DEFAULT NULL  -- NULL = auto-detect, TRUE = counts, FALSE = individual
+    return_counts BOOLEAN DEFAULT NULL,  -- NULL = auto-detect, TRUE = counts, FALSE = individual
+    filter_statuses TEXT[] DEFAULT NULL,
+    filter_water_qualities TEXT[] DEFAULT NULL,
+    filter_accessibilities TEXT[] DEFAULT NULL,
+    filter_types TEXT[] DEFAULT NULL
 )
 RETURNS TABLE (
     result_type VARCHAR,  -- 'count' or 'fountain'
@@ -371,7 +375,10 @@ BEGIN
             f.latitude BETWEEN min_lat AND max_lat
             AND f.longitude BETWEEN min_lng AND max_lng
             AND f.geohash IS NOT NULL
-            AND f.status = 'active'
+            AND (filter_statuses IS NULL AND f.status = 'active' OR filter_statuses IS NOT NULL AND f.status = ANY(filter_statuses))
+            AND (filter_water_qualities IS NULL OR f.water_quality = ANY(filter_water_qualities))
+            AND (filter_accessibilities IS NULL OR f.accessibility = ANY(filter_accessibilities))
+            AND (filter_types IS NULL OR f.type = ANY(filter_types))
         GROUP BY LEFT(f.geohash, precision_level);
     ELSE
         -- Return individual fountains
@@ -394,7 +401,10 @@ BEGIN
         WHERE 
             f.latitude BETWEEN min_lat AND max_lat
             AND f.longitude BETWEEN min_lng AND max_lng
-            AND f.status = 'active'
+            AND (filter_statuses IS NULL AND f.status = 'active' OR filter_statuses IS NOT NULL AND f.status = ANY(filter_statuses))
+            AND (filter_water_qualities IS NULL OR f.water_quality = ANY(filter_water_qualities))
+            AND (filter_accessibilities IS NULL OR f.accessibility = ANY(filter_accessibilities))
+            AND (filter_types IS NULL OR f.type = ANY(filter_types))
         ORDER BY f.latitude, f.longitude
         LIMIT 5000;  -- Safety limit
     END IF;

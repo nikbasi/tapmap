@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import '../models/map_result.dart';
 import '../models/fountain.dart';
 import '../models/fountain_cluster.dart';
+import '../models/fountain_filters.dart';
 
 class FountainApiService {
   // TODO: Replace with your actual backend API URL
@@ -17,17 +18,21 @@ class FountainApiService {
     required double maxLat,
     required double minLng,
     required double maxLng,
+    FountainFilters? filters,
   }) async {
     try {
+      final requestBody = {
+        'min_lat': minLat,
+        'max_lat': maxLat,
+        'min_lng': minLng,
+        'max_lng': maxLng,
+        if (filters != null && filters.hasActiveFilters) ...filters.toJson(),
+      };
+
       final response = await http.post(
         Uri.parse('$baseUrl/fountains/map-view'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'min_lat': minLat,
-          'max_lat': maxLat,
-          'min_lng': minLng,
-          'max_lng': maxLng,
-        }),
+        body: jsonEncode(requestBody),
       );
 
       if (response.statusCode == 200) {

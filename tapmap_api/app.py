@@ -81,13 +81,38 @@ def get_fountains_for_map_view():
         if not all([min_lat, max_lat, min_lng, max_lng]):
             return jsonify({'error': 'All bounds parameters are required'}), 400
         
+        # Extract filter parameters - only use if they exist and are not empty
+        # PostgreSQL's ANY(ARRAY[]) returns false for empty arrays, so we must pass None
+        filter_statuses = data.get('statuses')
+        if filter_statuses is not None and len(filter_statuses) == 0:
+            filter_statuses = None
+            
+        filter_water_qualities = data.get('water_qualities')
+        if filter_water_qualities is not None and len(filter_water_qualities) == 0:
+            filter_water_qualities = None
+            
+        filter_accessibilities = data.get('accessibilities')
+        if filter_accessibilities is not None and len(filter_accessibilities) == 0:
+            filter_accessibilities = None
+            
+        filter_types = data.get('types')
+        if filter_types is not None and len(filter_types) == 0:
+            filter_types = None
+        
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
         
-        # Call the database function
+        # Call the database function with filters
         cursor.execute("""
-            SELECT * FROM get_fountains_for_map_view(%s, %s, %s, %s, NULL)
-        """, (min_lat, max_lat, min_lng, max_lng))
+            SELECT * FROM get_fountains_for_map_view(
+                %s, %s, %s, %s, NULL,
+                %s, %s, %s, %s
+            )
+        """, (
+            min_lat, max_lat, min_lng, max_lng,
+            filter_statuses, filter_water_qualities,
+            filter_accessibilities, filter_types
+        ))
         
         results = cursor.fetchall()
         

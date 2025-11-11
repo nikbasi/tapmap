@@ -7,7 +7,9 @@ import 'package:geolocator/geolocator.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/map_result.dart';
 import '../models/fountain.dart';
+import '../models/fountain_filters.dart';
 import '../services/fountain_api_service.dart';
+import 'fountain_filter_sheet.dart';
 
 enum MapType { satellite, street }
 
@@ -27,6 +29,7 @@ class _FountainMapState extends State<FountainMap> {
   LatLng _currentCenter = const LatLng(37.7749, -122.4194);
   double _currentZoom = 10.0;
   MapType _mapType = MapType.satellite; // Default to satellite view
+  FountainFilters _filters = FountainFilters.empty();
 
   @override
   void initState() {
@@ -182,6 +185,7 @@ class _FountainMapState extends State<FountainMap> {
         maxLat: bounds.north,
         minLng: bounds.west,
         maxLng: bounds.east,
+        filters: _filters.hasActiveFilters ? _filters : null,
       );
 
       if (mounted) {
@@ -226,6 +230,27 @@ class _FountainMapState extends State<FountainMap> {
         maxZoom: 19,
       );
     }
+  }
+
+  /// Show filter bottom sheet
+  void _showFilterSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (BuildContext context) {
+        return FountainFilterSheet(
+          initialFilters: _filters,
+          onFiltersChanged: (FountainFilters newFilters) {
+            setState(() {
+              _filters = newFilters;
+            });
+            // Reload fountains with new filters
+            _loadFountainsForVisibleArea();
+          },
+        );
+      },
+    );
   }
 
   /// Toggle between satellite and street map types
@@ -609,6 +634,37 @@ class _FountainMapState extends State<FountainMap> {
             tooltip: _mapType == MapType.satellite ? 'Switch to Street View' : 'Switch to Satellite View',
             child: Icon(
               _mapType == MapType.satellite ? Icons.map : Icons.satellite,
+            ),
+          ),
+        ),
+        // Filter button
+        Positioned(
+          top: 20,
+          right: 80,
+          child: FloatingActionButton.small(
+            onPressed: _showFilterSheet,
+            tooltip: 'Filter fountains',
+            backgroundColor: _filters.hasActiveFilters ? Colors.blue : null,
+            child: Stack(
+              children: [
+                const Icon(Icons.filter_list),
+                if (_filters.hasActiveFilters)
+                  Positioned(
+                    right: 0,
+                    top: 0,
+                    child: Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: const BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
+                      ),
+                      constraints: const BoxConstraints(
+                        minWidth: 12,
+                        minHeight: 12,
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
         ),
