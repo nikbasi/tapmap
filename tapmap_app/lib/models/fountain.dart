@@ -20,11 +20,15 @@ class Fountain {
   });
 
   factory Fountain.fromJson(Map<String, dynamic> json) {
+    // Handle both string and numeric values from database
+    final latitude = json['latitude'];
+    final longitude = json['longitude'];
+    
     return Fountain(
       id: json['fountain_id'] ?? json['id'] ?? '',
       name: json['fountain_name'] ?? json['name'] ?? 'Unnamed Fountain',
-      latitude: (json['latitude'] ?? 0.0).toDouble(),
-      longitude: (json['longitude'] ?? 0.0).toDouble(),
+      latitude: latitude is String ? double.parse(latitude) : (latitude ?? 0.0).toDouble(),
+      longitude: longitude is String ? double.parse(longitude) : (longitude ?? 0.0).toDouble(),
       geohash: json['geohash'],
       status: json['status'],
       waterQuality: json['water_quality'],

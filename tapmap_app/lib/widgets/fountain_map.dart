@@ -67,8 +67,8 @@ class _FountainMapState extends State<FountainMap> {
     return 8;                     // Neighborhood/individual
   }
 
-  /// Calculate visible bounds from center and zoom
-  LatLngBounds _calculateBounds(LatLng center, double zoom) {
+  /// Calculate visible bounds from center and zoom (fallback when map size is unknown)
+  LatLngBounds _calculateBoundsFallback(LatLng center, double zoom) {
     // Approximate degrees per pixel at given zoom
     // At zoom 0: ~360 degrees / 256 pixels = 1.40625 degrees per pixel
     // Each zoom level doubles the resolution
@@ -84,12 +84,22 @@ class _FountainMapState extends State<FountainMap> {
     );
   }
 
+  /// Try to get the actual visible bounds from the map controller
+  LatLngBounds? _getActualVisibleBounds() {
+    try {
+      return _mapController.camera.visibleBounds;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Load fountains for the currently visible map area
   Future<void> _loadFountainsForVisibleArea() async {
     if (_isLoading) return;
 
-    // Calculate bounds from current center and zoom
-    final bounds = _calculateBounds(_currentCenter, _currentZoom);
+    // Prefer actual visible bounds from the map; fall back to approximation if unavailable
+    final bounds = _getActualVisibleBounds() ??
+        _calculateBoundsFallback(_currentCenter, _currentZoom);
 
     setState(() {
       _isLoading = true;
@@ -192,15 +202,11 @@ class _FountainMapState extends State<FountainMap> {
             minZoom: 3.0,
             maxZoom: 18.0,
             onMapEvent: (MapEvent event) {
-              if (event is MapEventMoveEnd) {
-                // Update current center from map controller
-                final camera = _mapController.camera;
-                if (camera != null) {
-                  _currentCenter = camera.center;
-                  _currentZoom = camera.zoom;
-                  _debouncedLoadFountains();
-                }
-              }
+              // Update current camera state and debounce fountain loading
+              final camera = event.camera;
+              _currentCenter = camera.center;
+              _currentZoom = camera.zoom;
+              _debouncedLoadFountains();
             },
           ),
           children: [
