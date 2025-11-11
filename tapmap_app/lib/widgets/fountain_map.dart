@@ -5,6 +5,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import '../models/map_result.dart';
+import '../models/fountain.dart';
 import '../services/fountain_api_service.dart';
 
 enum MapType { satellite, street }
@@ -233,6 +234,182 @@ class _FountainMapState extends State<FountainMap> {
     });
   }
 
+  /// Show fountain details in a bottom sheet
+  void _showFountainDetails(Fountain fountain) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (BuildContext context) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.5,
+          minChildSize: 0.3,
+          maxChildSize: 0.9,
+          builder: (context, scrollController) {
+            return Container(
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              child: Column(
+                children: [
+                  // Drag handle
+                  Container(
+                    margin: const EdgeInsets.symmetric(vertical: 12),
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  // Content
+                  Expanded(
+                    child: ListView(
+                      controller: scrollController,
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      children: [
+                        // Header with icon
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.blue.withValues(alpha: 0.1),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.water_drop,
+                                color: Colors.blue,
+                                size: 32,
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    fountain.name,
+                                    style: const TextStyle(
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  if (fountain.status != null)
+                                    Text(
+                                      fountain.status!,
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: fountain.status == 'active'
+                                            ? Colors.green
+                                            : Colors.grey[600],
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 24),
+                        // Details section
+                        _buildDetailRow(
+                          icon: Icons.location_on,
+                          label: 'Location',
+                          value: '${fountain.latitude.toStringAsFixed(6)}, ${fountain.longitude.toStringAsFixed(6)}',
+                        ),
+                        if (fountain.waterQuality != null)
+                          _buildDetailRow(
+                            icon: Icons.water,
+                            label: 'Water Quality',
+                            value: fountain.waterQuality!,
+                          ),
+                        if (fountain.accessibility != null)
+                          _buildDetailRow(
+                            icon: Icons.accessible,
+                            label: 'Accessibility',
+                            value: fountain.accessibility!,
+                          ),
+                        const SizedBox(height: 24),
+                        // Action buttons
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: () {
+                                  // Open in maps app
+                                  // You can use url_launcher package for this
+                                },
+                                icon: const Icon(Icons.directions),
+                                label: const Text('Directions'),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed: () {
+                                  Navigator.pop(context);
+                                },
+                                icon: const Icon(Icons.close),
+                                label: const Text('Close'),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 20),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  /// Build a detail row widget
+  Widget _buildDetailRow({
+    required IconData icon,
+    required String label,
+    required String value,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: Colors.blue, size: 24),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// Build cluster marker widget
   Widget _buildClusterMarker(MapResult result) {
     if (result.type != MapResultType.count || result.cluster == null) {
@@ -321,7 +498,19 @@ class _FountainMapState extends State<FountainMap> {
                     ),
                     width: 60,
                     height: 60,
-                    child: _buildClusterMarker(result),
+                    child: GestureDetector(
+                      onTap: () {
+                        // Zoom in when cluster is tapped
+                        _mapController.move(
+                          LatLng(
+                            result.cluster!.centerLat,
+                            result.cluster!.centerLng,
+                          ),
+                          _currentZoom + 2,
+                        );
+                      },
+                      child: _buildClusterMarker(result),
+                    ),
                   );
                 } else if (result.type == MapResultType.fountain && 
                           result.fountain != null) {
@@ -332,7 +521,10 @@ class _FountainMapState extends State<FountainMap> {
                     ),
                     width: 30,
                     height: 30,
-                    child: _buildFountainMarker(result),
+                    child: GestureDetector(
+                      onTap: () => _showFountainDetails(result.fountain!),
+                      child: _buildFountainMarker(result),
+                    ),
                   );
                 }
                 return const Marker(point: LatLng(0, 0), child: SizedBox.shrink());
