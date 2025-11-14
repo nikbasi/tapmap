@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'providers/auth_provider.dart';
 import 'widgets/fountain_map.dart';
+import 'screens/login_screen.dart';
 
 void main() {
   runApp(const TapMapApp());
@@ -10,13 +13,39 @@ class TapMapApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'TapMap',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
-        useMaterial3: true,
+    return ChangeNotifierProvider(
+      create: (_) => AuthProvider(),
+      child: MaterialApp(
+        title: 'TapMap',
+        theme: ThemeData(
+          colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+          useMaterial3: true,
+        ),
+        home: const AuthWrapper(),
       ),
-      home: const TapMapHomePage(),
+    );
+  }
+}
+
+class AuthWrapper extends StatelessWidget {
+  const AuthWrapper({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<AuthProvider>(
+      builder: (context, authProvider, _) {
+        // Show loading screen while checking authentication
+        if (authProvider.isLoading) {
+          return const Scaffold(
+            body: Center(
+              child: CircularProgressIndicator(),
+            ),
+          );
+        }
+
+        // Always show the map - login is optional
+        return const TapMapHomePage();
+      },
     );
   }
 }
@@ -26,12 +55,82 @@ class TapMapHomePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        title: const Text('TapMap - Find Fountains'),
-      ),
-      body: const FountainMap(),
+    return Consumer<AuthProvider>(
+      builder: (context, authProvider, _) {
+        final user = authProvider.user;
+
+        return Scaffold(
+          appBar: AppBar(
+            backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+            title: const Text('TapMap - Find Fountains'),
+            actions: [
+              if (user != null) ...[
+                // Show user info if logged in
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Center(
+                    child: Row(
+                      children: [
+                        if (user.displayName != null)
+                          Text(
+                            user.displayName!,
+                            style: const TextStyle(fontSize: 14),
+                          )
+                        else
+                          Text(
+                            user.email.split('@')[0],
+                            style: const TextStyle(fontSize: 14),
+                          ),
+                        const SizedBox(width: 8),
+                        const Icon(Icons.account_circle, size: 24),
+                      ],
+                    ),
+                  ),
+                ),
+                // Sign out button
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_vert),
+                  onSelected: (value) {
+                    if (value == 'logout') {
+                      authProvider.signOut();
+                    }
+                  },
+                  itemBuilder: (BuildContext context) => [
+                    const PopupMenuItem(
+                      value: 'logout',
+                      child: Row(
+                        children: [
+                          Icon(Icons.logout, size: 20),
+                          SizedBox(width: 8),
+                          Text('Sign Out'),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ] else ...[
+                // Show login button if not logged in
+                TextButton.icon(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const LoginScreen(),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.login, size: 20),
+                  label: const Text('Login'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+              ],
+            ],
+          ),
+          body: const FountainMap(),
+        );
+      },
     );
   }
 }

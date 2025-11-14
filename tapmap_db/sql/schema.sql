@@ -106,3 +106,25 @@ $$ language 'plpgsql';
 CREATE TRIGGER update_fountains_updated_at BEFORE UPDATE ON fountains
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+-- Users table for authentication
+CREATE TABLE IF NOT EXISTS users (
+    id SERIAL PRIMARY KEY,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,  -- bcrypt hash
+    display_name VARCHAR(255),
+    provider VARCHAR(50) DEFAULT 'email',  -- 'email', 'google', 'apple'
+    provider_id VARCHAR(255),  -- OAuth provider user ID
+    avatar_url VARCHAR(1000),
+    email_verified BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_login TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+CREATE INDEX IF NOT EXISTS idx_users_provider ON users(provider, provider_id);
+
+-- Trigger to automatically update updated_at for users
+CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
