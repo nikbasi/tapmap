@@ -630,6 +630,7 @@ class _FountainMapState extends State<FountainMap> {
           top: 20,
           right: 20,
           child: FloatingActionButton.small(
+            heroTag: 'map_type_toggle',
             onPressed: _toggleMapType,
             tooltip: _mapType == MapType.satellite ? 'Switch to Street View' : 'Switch to Satellite View',
             child: Icon(
@@ -642,6 +643,7 @@ class _FountainMapState extends State<FountainMap> {
           top: 20,
           right: 80,
           child: FloatingActionButton.small(
+            heroTag: 'filter_button',
             onPressed: _showFilterSheet,
             tooltip: 'Filter fountains',
             backgroundColor: _filters.hasActiveFilters ? Colors.blue : null,
