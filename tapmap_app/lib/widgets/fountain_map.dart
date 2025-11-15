@@ -31,6 +31,7 @@ class _FountainMapState extends State<FountainMap> {
   MapType _mapType = MapType.satellite; // Default to satellite view
   FountainFilters _filters = FountainFilters.empty();
   LatLng? _userLocation; // Store user's current location
+  bool _isRequestingLocation = false; // Track if location request is in progress
 
   @override
   void initState() {
@@ -39,12 +40,41 @@ class _FountainMapState extends State<FountainMap> {
     _requestLocationAndCenter();
   }
 
+  /// Center map on user's location or request location if not available
+  Future<void> _centerOnUserLocation() async {
+    // If we already have the user's location, just center the map on it
+    if (_userLocation != null) {
+      _mapController.move(_userLocation!, _currentZoom < 14.0 ? 14.0 : _currentZoom);
+      return;
+    }
+    
+    // Otherwise, request location permission and get location
+    await _requestLocationAndCenter();
+  }
+
   /// Request location permission and center map on user's location
   Future<void> _requestLocationAndCenter() async {
+    if (_isRequestingLocation) return;
+    
+    setState(() {
+      _isRequestingLocation = true;
+    });
+
     // Check if location services are enabled
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
       print('Location services are disabled.');
+      if (mounted) {
+        setState(() {
+          _isRequestingLocation = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Location services are disabled. Please enable them in your device settings.'),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
       // Load fountains for default location
       Future.delayed(const Duration(milliseconds: 500), () {
         _loadFountainsForVisibleArea();
@@ -58,6 +88,17 @@ class _FountainMapState extends State<FountainMap> {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
         print('Location permissions are denied');
+        if (mounted) {
+          setState(() {
+            _isRequestingLocation = false;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Location permission is required to show your location on the map.'),
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
         // Load fountains for default location
         Future.delayed(const Duration(milliseconds: 500), () {
           _loadFountainsForVisibleArea();
@@ -68,6 +109,17 @@ class _FountainMapState extends State<FountainMap> {
 
     if (permission == LocationPermission.deniedForever) {
       print('Location permissions are permanently denied');
+      if (mounted) {
+        setState(() {
+          _isRequestingLocation = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Location permission is permanently denied. Please enable it in your device settings.'),
+            duration: Duration(seconds: 4),
+          ),
+        );
+      }
       // Load fountains for default location
       Future.delayed(const Duration(milliseconds: 500), () {
         _loadFountainsForVisibleArea();
@@ -88,6 +140,7 @@ class _FountainMapState extends State<FountainMap> {
           _userLocation = LatLng(position.latitude, position.longitude);
           _currentCenter = _userLocation!;
           _currentZoom = 14.0; // Zoom in closer when showing user location
+          _isRequestingLocation = false;
         });
 
         // Move map to user location
@@ -100,6 +153,17 @@ class _FountainMapState extends State<FountainMap> {
       }
     } catch (e) {
       print('Error getting location: $e');
+      if (mounted) {
+        setState(() {
+          _isRequestingLocation = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error getting location: $e'),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
       // Load fountains for default location
       Future.delayed(const Duration(milliseconds: 500), () {
         _loadFountainsForVisibleArea();
@@ -699,6 +763,28 @@ class _FountainMapState extends State<FountainMap> {
                   ),
               ],
             ),
+          ),
+        ),
+        // My Location button (always visible to center map on user location)
+        Positioned(
+          bottom: 20,
+          right: 20,
+          child: FloatingActionButton(
+            heroTag: 'my_location_button',
+            onPressed: _isRequestingLocation ? null : _centerOnUserLocation,
+            tooltip: _userLocation != null ? 'Center on my location' : 'Show my location',
+            child: _isRequestingLocation
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                : Icon(
+                    _userLocation != null ? Icons.my_location : Icons.my_location_outlined,
+                  ),
           ),
         ),
       ],
