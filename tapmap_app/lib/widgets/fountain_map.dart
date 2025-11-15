@@ -32,6 +32,7 @@ class _FountainMapState extends State<FountainMap> {
   FountainFilters _filters = FountainFilters.empty();
   LatLng? _userLocation; // Store user's current location
   bool _isRequestingLocation = false; // Track if location request is in progress
+  bool _isFountainSheetOpen = false; // Track if fountain details sheet is open
 
   @override
   void initState() {
@@ -385,137 +386,164 @@ class _FountainMapState extends State<FountainMap> {
 
   /// Show fountain details in a bottom sheet
   void _showFountainDetails(Fountain fountain) {
+    setState(() {
+      _isFountainSheetOpen = true;
+    });
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      isDismissible: true,
       backgroundColor: Colors.transparent,
+      enableDrag: true,
       builder: (BuildContext context) {
-        return DraggableScrollableSheet(
-          initialChildSize: 0.5,
-          minChildSize: 0.3,
-          maxChildSize: 0.9,
-          builder: (context, scrollController) {
-            return Container(
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        return Stack(
+          children: [
+            // Invisible tap area that covers the entire screen
+            Positioned.fill(
+              child: GestureDetector(
+                onTap: () => Navigator.pop(context),
+                child: Container(color: Colors.transparent),
               ),
-              child: Column(
-                children: [
-                  // Drag handle
-                  Container(
-                    margin: const EdgeInsets.symmetric(vertical: 12),
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.grey[300],
-                      borderRadius: BorderRadius.circular(2),
+            ),
+            // The actual sheet content
+            DraggableScrollableSheet(
+              initialChildSize: 0.5,
+              minChildSize: 0.3,
+              maxChildSize: 0.9,
+              builder: (context, scrollController) {
+                return GestureDetector(
+                  onTap: () {}, // Prevent taps on sheet from closing it
+                  child: Container(
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
                     ),
-                  ),
-                  // Content
-                  Expanded(
-                    child: ListView(
-                      controller: scrollController,
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Column(
                       children: [
-                        // Header with icon
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: Colors.blue.withValues(alpha: 0.1),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.water_drop,
-                                color: Colors.blue,
-                                size: 32,
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                        // Drag handle
+                        Container(
+                          margin: const EdgeInsets.symmetric(vertical: 12),
+                          width: 40,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: Colors.grey[300],
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                        // Content
+                        Expanded(
+                          child: ListView(
+                            controller: scrollController,
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            children: [
+                              // Header with icon
+                              Row(
                                 children: [
-                                  Text(
-                                    fountain.name,
-                                    style: const TextStyle(
-                                      fontSize: 24,
-                                      fontWeight: FontWeight.bold,
+                                  Container(
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: Colors.blue.withValues(alpha: 0.1),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(
+                                      Icons.water_drop,
+                                      color: Colors.blue,
+                                      size: 32,
                                     ),
                                   ),
-                                  if (fountain.status != null)
-                                    Text(
-                                      fountain.status!,
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        color: fountain.status == 'active'
-                                            ? Colors.green
-                                            : Colors.grey[600],
-                                      ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          fountain.name,
+                                          style: const TextStyle(
+                                            fontSize: 24,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        if (fountain.status != null)
+                                          Text(
+                                            fountain.status!,
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              color: fountain.status == 'active'
+                                                  ? Colors.green
+                                                  : Colors.grey[600],
+                                            ),
+                                          ),
+                                      ],
                                     ),
+                                  ),
                                 ],
                               ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 24),
-                        // Details section
-                        _buildDetailRow(
-                          icon: Icons.location_on,
-                          label: 'Location',
-                          value: '${fountain.latitude.toStringAsFixed(6)}, ${fountain.longitude.toStringAsFixed(6)}',
-                        ),
-                        if (fountain.waterQuality != null)
-                          _buildDetailRow(
-                            icon: Icons.water,
-                            label: 'Water Quality',
-                            value: fountain.waterQuality!,
-                          ),
-                        if (fountain.accessibility != null)
-                          _buildDetailRow(
-                            icon: Icons.accessible,
-                            label: 'Accessibility',
-                            value: fountain.accessibility!,
-                          ),
-                        const SizedBox(height: 24),
-                        // Action buttons
-                        Row(
-                          children: [
-                            Expanded(
-                              child: OutlinedButton.icon(
-                                onPressed: () {
-                                  _openGoogleMapsDirections(fountain);
-                                  Navigator.pop(context); // Close bottom sheet
-                                },
-                                icon: const Icon(Icons.directions),
-                                label: const Text('Directions'),
+                              const SizedBox(height: 24),
+                              // Details section
+                              _buildDetailRow(
+                                icon: Icons.location_on,
+                                label: 'Location',
+                                value: '${fountain.latitude.toStringAsFixed(6)}, ${fountain.longitude.toStringAsFixed(6)}',
                               ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: ElevatedButton.icon(
-                                onPressed: () {
-                                  Navigator.pop(context);
-                                },
-                                icon: const Icon(Icons.close),
-                                label: const Text('Close'),
+                              if (fountain.waterQuality != null)
+                                _buildDetailRow(
+                                  icon: Icons.water,
+                                  label: 'Water Quality',
+                                  value: fountain.waterQuality!,
+                                ),
+                              if (fountain.accessibility != null)
+                                _buildDetailRow(
+                                  icon: Icons.accessible,
+                                  label: 'Accessibility',
+                                  value: fountain.accessibility!,
+                                ),
+                              const SizedBox(height: 24),
+                              // Action buttons
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: OutlinedButton.icon(
+                                      onPressed: () {
+                                        _openGoogleMapsDirections(fountain);
+                                        Navigator.pop(context); // Close bottom sheet
+                                      },
+                                      icon: const Icon(Icons.directions),
+                                      label: const Text('Directions'),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: ElevatedButton.icon(
+                                      onPressed: () {
+                                        Navigator.pop(context);
+                                      },
+                                      icon: const Icon(Icons.close),
+                                      label: const Text('Close'),
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ),
-                          ],
+                              const SizedBox(height: 20),
+                            ],
+                          ),
                         ),
-                        const SizedBox(height: 20),
                       ],
                     ),
                   ),
-                ],
-              ),
-            );
-          },
+                );
+              },
+            ),
+          ],
         );
       },
-    );
+    ).whenComplete(() {
+      // Reset flag when sheet is closed (by any method)
+      if (mounted) {
+        setState(() {
+          _isFountainSheetOpen = false;
+        });
+      }
+    });
   }
 
   /// Build a detail row widget
@@ -640,6 +668,12 @@ class _FountainMapState extends State<FountainMap> {
             initialZoom: _currentZoom,
             minZoom: 3.0,
             maxZoom: 18.0,
+            onTap: (tapPosition, point) {
+              // Close fountain details sheet if open when tapping on the map
+              if (_isFountainSheetOpen) {
+                Navigator.pop(context);
+              }
+            },
             onMapEvent: (MapEvent event) {
               // Update current camera state and debounce fountain loading
               // Only update on move/zoom end events
