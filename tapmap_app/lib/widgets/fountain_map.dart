@@ -30,6 +30,7 @@ class _FountainMapState extends State<FountainMap> {
   double _currentZoom = 10.0;
   MapType _mapType = MapType.satellite; // Default to satellite view
   FountainFilters _filters = FountainFilters.empty();
+  LatLng? _userLocation; // Store user's current location
 
   @override
   void initState() {
@@ -84,7 +85,8 @@ class _FountainMapState extends State<FountainMap> {
 
       if (mounted) {
         setState(() {
-          _currentCenter = LatLng(position.latitude, position.longitude);
+          _userLocation = LatLng(position.latitude, position.longitude);
+          _currentCenter = _userLocation!;
           _currentZoom = 14.0; // Zoom in closer when showing user location
         });
 
@@ -545,6 +547,24 @@ class _FountainMapState extends State<FountainMap> {
     );
   }
 
+  /// Build user location marker widget
+  Widget _buildUserLocationMarker() {
+    return Container(
+      width: 36,
+      height: 36,
+      decoration: const BoxDecoration(
+        color: Colors.green,
+        shape: BoxShape.circle,
+        border: Border.fromBorderSide(BorderSide(color: Colors.white, width: 3)),
+      ),
+      child: const Icon(
+        Icons.my_location,
+        color: Colors.white,
+        size: 20,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Stack(
@@ -572,46 +592,57 @@ class _FountainMapState extends State<FountainMap> {
             _getTileLayer(),
             // Markers layer
             MarkerLayer(
-              markers: _mapResults.map((result) {
-                if (result.type == MapResultType.count && result.cluster != null) {
-                  return Marker(
-                    point: LatLng(
-                      result.cluster!.centerLat,
-                      result.cluster!.centerLng,
-                    ),
-                    width: 60,
-                    height: 60,
-                    child: GestureDetector(
-                      onTap: () {
-                        // Zoom in when cluster is tapped
-                        _mapController.move(
-                          LatLng(
-                            result.cluster!.centerLat,
-                            result.cluster!.centerLng,
-                          ),
-                          _currentZoom + 2,
-                        );
-                      },
-                      child: _buildClusterMarker(result),
-                    ),
-                  );
-                } else if (result.type == MapResultType.fountain && 
-                          result.fountain != null) {
-                  return Marker(
-                    point: LatLng(
-                      result.fountain!.latitude,
-                      result.fountain!.longitude,
-                    ),
-                    width: 30,
-                    height: 30,
-                    child: GestureDetector(
-                      onTap: () => _showFountainDetails(result.fountain!),
-                      child: _buildFountainMarker(result),
-                    ),
-                  );
-                }
-                return const Marker(point: LatLng(0, 0), child: SizedBox.shrink());
-              }).toList(),
+              markers: [
+                // User location marker (if available)
+                if (_userLocation != null)
+                  Marker(
+                    point: _userLocation!,
+                    width: 36,
+                    height: 36,
+                    child: _buildUserLocationMarker(),
+                  ),
+                // Fountain markers
+                ..._mapResults.map((result) {
+                  if (result.type == MapResultType.count && result.cluster != null) {
+                    return Marker(
+                      point: LatLng(
+                        result.cluster!.centerLat,
+                        result.cluster!.centerLng,
+                      ),
+                      width: 60,
+                      height: 60,
+                      child: GestureDetector(
+                        onTap: () {
+                          // Zoom in when cluster is tapped
+                          _mapController.move(
+                            LatLng(
+                              result.cluster!.centerLat,
+                              result.cluster!.centerLng,
+                            ),
+                            _currentZoom + 2,
+                          );
+                        },
+                        child: _buildClusterMarker(result),
+                      ),
+                    );
+                  } else if (result.type == MapResultType.fountain && 
+                            result.fountain != null) {
+                    return Marker(
+                      point: LatLng(
+                        result.fountain!.latitude,
+                        result.fountain!.longitude,
+                      ),
+                      width: 30,
+                      height: 30,
+                      child: GestureDetector(
+                        onTap: () => _showFountainDetails(result.fountain!),
+                        child: _buildFountainMarker(result),
+                      ),
+                    );
+                  }
+                  return const Marker(point: LatLng(0, 0), child: SizedBox.shrink());
+                }),
+              ],
             ),
           ],
         ),
