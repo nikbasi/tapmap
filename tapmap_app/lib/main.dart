@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'providers/auth_provider.dart';
 import 'widgets/fountain_map.dart';
 import 'screens/login_screen.dart';
+import 'screens/profile_screen.dart';
 
 void main() {
   runApp(const TapMapApp());
@@ -69,44 +70,45 @@ class TapMapHomePage extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 8),
                   child: Center(
-                    child: Row(
-                      children: [
-                        if (user.displayName != null)
-                          Text(
-                            user.displayName!,
-                            style: const TextStyle(fontSize: 14),
-                          )
-                        else
-                          Text(
-                            user.email.split('@')[0],
-                            style: const TextStyle(fontSize: 14),
+                    child: InkWell(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const ProfileScreen(),
                           ),
-                        const SizedBox(width: 8),
-                        const Icon(Icons.account_circle, size: 24),
-                      ],
-                    ),
-                  ),
-                ),
-                // Sign out button
-                PopupMenuButton<String>(
-                  icon: const Icon(Icons.more_vert),
-                  onSelected: (value) {
-                    if (value == 'logout') {
-                      authProvider.signOut();
-                    }
-                  },
-                  itemBuilder: (BuildContext context) => [
-                    const PopupMenuItem(
-                      value: 'logout',
-                      child: Row(
-                        children: [
-                          Icon(Icons.logout, size: 20),
-                          SizedBox(width: 8),
-                          Text('Sign Out'),
-                        ],
+                        );
+                      },
+                      borderRadius: BorderRadius.circular(20),
+                      child: Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: Row(
+                          children: [
+                            if (user.displayName != null)
+                              Text(
+                                user.displayName!,
+                                style: const TextStyle(fontSize: 14),
+                              )
+                            else
+                              Text(
+                                user.email.split('@')[0],
+                                style: const TextStyle(fontSize: 14),
+                              ),
+                            const SizedBox(width: 8),
+                            CircleAvatar(
+                              radius: 12,
+                              backgroundImage: user.avatarUrl != null
+                                  ? NetworkImage(user.avatarUrl!)
+                                  : null,
+                              child: user.avatarUrl == null
+                                  ? const Icon(Icons.person, size: 16)
+                                  : null,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ],
+                  ),
                 ),
               ] else ...[
                 // Show login button if not logged in

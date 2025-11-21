@@ -1,12 +1,18 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 class AuthService {
   static const String baseUrl = 'http://localhost:3000/api';
   static const _storage = FlutterSecureStorage();
   static const String _tokenKey = 'auth_token';
   static const String _userKey = 'user_data';
+  
+  final GoogleSignIn _googleSignIn = GoogleSignIn(
+    // Web Client ID (needed for Web and to get ID token on Mobile)
+    clientId: '500324905447-1nicspq57p31pdom8ic4a1fa129lbceq.apps.googleusercontent.com',
+  );
 
   /// Sign up with email and password
   Future<AuthResult> signUp({
@@ -81,6 +87,58 @@ class AuthService {
       }
     } catch (e) {
       return AuthResult.failure('Network error: $e');
+    }
+  }
+
+  /// Sign in with Google
+  Future<AuthResult> signInWithGoogle() async {
+    try {
+      // Trigger the authentication flow
+      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+      
+      if (googleUser == null) {
+        // The user canceled the sign-in
+        return AuthResult.failure('Sign in canceled');
+      }
+
+      // Obtain the auth details from the request
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      final String? idToken = googleAuth.idToken;
+      final String? accessToken = googleAuth.accessToken;
+
+      if (idToken == null && accessToken == null) {
+        return AuthResult.failure('Failed to retrieve Google Auth Credentials');
+      }
+
+      // Send the token to the backend
+      final response = await http.post(
+        Uri.parse('$baseUrl/auth/google'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'token': idToken,
+          'access_token': accessToken,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final token = data['token'] as String;
+        final user = data['user'] as Map<String, dynamic>;
+
+        // Store token and user data
+        await _storage.write(key: _tokenKey, value: token);
+        await _storage.write(key: _userKey, value: jsonEncode(user));
+
+        return AuthResult.success(
+          token: token,
+          user: User.fromJson(user),
+        );
+      } else {
+        final error = jsonDecode(response.body)['error'] as String?;
+        return AuthResult.failure(error ?? 'Google sign in failed');
+      }
+    } catch (e) {
+      return AuthResult.failure('Google sign in error: $e');
     }
   }
 
@@ -159,6 +217,7 @@ class AuthService {
   Future<void> signOut() async {
     await _storage.delete(key: _tokenKey);
     await _storage.delete(key: _userKey);
+    await _googleSignIn.signOut();
   }
 
   /// Check if user is authenticated

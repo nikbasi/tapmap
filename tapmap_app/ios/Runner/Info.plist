@@ -49,5 +49,16 @@
 	<string>TapMap needs your location to show nearby fountains on the map.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>TapMap needs your location to show nearby fountains on the map.</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.500324905447-oevs7ua3tde3dhj5mkfsfmuiqfa8kjq5</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

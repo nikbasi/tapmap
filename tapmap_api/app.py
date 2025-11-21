@@ -6,6 +6,7 @@ Flask API server that connects to PostgreSQL and exposes fountain data endpoints
 
 import os
 import psycopg2
+import requests
 from psycopg2.extras import RealDictCursor
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -13,6 +14,8 @@ from dotenv import load_dotenv
 import logging
 import jwt
 import bcrypt
+from google.oauth2 import id_token
+from google.auth.transport import requests as google_requests
 from datetime import datetime, timedelta
 from functools import wraps
 
@@ -39,6 +42,9 @@ DB_CONFIG = {
 JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'your-secret-key-change-in-production')
 JWT_ALGORITHM = 'HS256'
 JWT_EXPIRATION_HOURS = 24 * 7  # 7 days
+
+# Google Auth configuration
+GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID')
 
 
 def get_db_connection():
@@ -442,6 +448,127 @@ def login():
         
     except Exception as e:
         logger.error(f"Error in login: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/auth/google', methods=['POST'])
+def google_login():
+    """Login with Google ID token."""
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'error': 'Request body is required'}), 400
+            
+        token = data.get('token')
+        access_token = data.get('access_token')
+        
+        if not token and not access_token:
+            return jsonify({'error': 'Token or Access Token is required'}), 400
+            
+        if not GOOGLE_CLIENT_ID:
+            return jsonify({'error': 'Server configuration error: GOOGLE_CLIENT_ID not set'}), 500
+
+        email = None
+        display_name = None
+        picture = None
+
+        # Try verifying ID token first if present
+        if token:
+            try:
+                # Verify the token
+                id_info = id_token.verify_oauth2_token(
+                    token, 
+                    google_requests.Request(), 
+                    GOOGLE_CLIENT_ID
+                )
+                
+                email = id_info['email']
+                display_name = id_info.get('name', '')
+                picture = id_info.get('picture', '')
+            except ValueError as e:
+                logger.warning(f"Invalid ID token: {e}")
+                # If ID token fails, we'll try access token below if available
+        
+        # If we still don't have email and we have an access token, try that
+        if not email and access_token:
+            try:
+                # Verify access token by calling Google UserInfo API
+                user_info_response = requests.get(
+                    'https://www.googleapis.com/oauth2/v3/userinfo',
+                    headers={'Authorization': f'Bearer {access_token}'}
+                )
+                
+                if user_info_response.status_code == 200:
+                    user_info = user_info_response.json()
+                    email = user_info.get('email')
+                    display_name = user_info.get('name', '')
+                    picture = user_info.get('picture', '')
+                else:
+                    logger.error(f"Failed to verify access token: {user_info_response.text}")
+            except Exception as e:
+                logger.error(f"Error verifying access token: {e}")
+
+        if not email:
+            return jsonify({'error': 'Failed to verify Google account'}), 401
+            
+        conn = get_db_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # Check if user exists
+        cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
+        user = cursor.fetchone()
+        
+        if not user:
+            # Create new user
+            try:
+                cursor.execute("""
+                    INSERT INTO users (email, display_name, provider, avatar_url, email_verified, password_hash)
+                    VALUES (%s, %s, 'google', %s, true, 'GOOGLE_AUTH_NO_PASSWORD')
+                    RETURNING id, email, display_name, provider, avatar_url
+                """, (email, display_name, picture))
+                user = cursor.fetchone()
+                conn.commit()
+            except psycopg2.IntegrityError:
+                conn.rollback()
+                # Race condition, try to fetch again
+                cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
+                user = cursor.fetchone()
+        else:
+            # Update existing user info if needed (optional, but good for keeping avatar fresh)
+            # Only update if provider is google or if we want to link accounts (logic can vary)
+            # For now, just update last login
+            cursor.execute("""
+                UPDATE users 
+                SET last_login = CURRENT_TIMESTAMP,
+                    avatar_url = COALESCE(%s, avatar_url)
+                WHERE id = %s
+            """, (picture, user['id']))
+            conn.commit()
+            
+        if not user:
+            logger.error(f"Failed to create or retrieve user for email: {email}")
+            return jsonify({'error': 'Failed to create or retrieve user'}), 500
+
+        # Generate JWT token
+        jwt_token = generate_jwt_token(user['id'], user['email'])
+        
+        cursor.close()
+        conn.close()
+        
+        return jsonify({
+            'token': jwt_token,
+            'user': {
+                'id': user['id'],
+                'email': user['email'],
+                'display_name': user['display_name'],
+                'provider': user['provider'],
+                'avatar_url': user.get('avatar_url')
+            }
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error in google_login: {e}")
         return jsonify({'error': str(e)}), 500
 
 

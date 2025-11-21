@@ -64,6 +64,41 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  Future<void> _handleGoogleLogin() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final result = await authProvider.signInWithGoogle();
+
+    setState(() {
+      _isLoading = false;
+    });
+
+    if (!mounted) return;
+
+    if (result.success) {
+      // Close login screen and return to map
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Successfully logged in with Google!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } else {
+      if (result.error != 'Sign in canceled') {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result.error ?? 'Google login failed'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -185,14 +220,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 24),
                 OutlinedButton.icon(
-                  onPressed: () {
-                    // TODO: Implement Google sign in
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Google sign in not yet implemented'),
-                      ),
-                    );
-                  },
+                  onPressed: _isLoading ? null : _handleGoogleLogin,
                   icon: const Icon(Icons.g_mobiledata),
                   label: const Text('Continue with Google'),
                   style: OutlinedButton.styleFrom(

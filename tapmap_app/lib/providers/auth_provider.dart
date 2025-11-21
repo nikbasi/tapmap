@@ -101,6 +101,29 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
+  /// Sign in with Google
+  Future<AuthResult> signInWithGoogle() async {
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      final result = await _authService.signInWithGoogle();
+
+      if (result.success) {
+        _user = result.user;
+        _isAuthenticated = true;
+      }
+
+      _isLoading = false;
+      notifyListeners();
+      return result;
+    } catch (e) {
+      _isLoading = false;
+      notifyListeners();
+      return AuthResult.failure('An error occurred: $e');
+    }
+  }
+
   /// Sign out
   Future<void> signOut() async {
     _isLoading = true;
@@ -134,6 +157,9 @@ class AuthProvider with ChangeNotifier {
     }
   }
 }
+
+
+
 
 
 
