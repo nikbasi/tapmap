@@ -10,10 +10,14 @@ class AuthService {
   static const String _tokenKey = 'auth_token';
   static const String _userKey = 'user_data';
   
+  // Configure Google Sign-In based on platform
+  // For Android: serverClientId is required to get ID token
+  // The Android OAuth client should be in google-services.json
   final GoogleSignIn _googleSignIn = GoogleSignIn(
-    // serverClientId is required to get an ID token on Android
-    // This should be the Web client ID from Firebase Console
+    // serverClientId is the Web client ID - needed for ID token on Android
     serverClientId: '500324905447-1nicspq57p31pdom8ic4a1fa129lbceq.apps.googleusercontent.com',
+    // scopes for additional permissions if needed
+    scopes: ['email', 'profile'],
   );
 
   /// Sign up with email and password
@@ -109,7 +113,7 @@ class AuthService {
       final String? accessToken = googleAuth.accessToken;
 
       if (idToken == null && accessToken == null) {
-        return AuthResult.failure('Failed to retrieve Google Auth Credentials');
+        return AuthResult.failure('Failed to retrieve Google Auth Credentials. Please check your Firebase configuration.');
       }
 
       // Send the token to the backend
@@ -140,6 +144,15 @@ class AuthService {
         return AuthResult.failure(error ?? 'Google sign in failed');
       }
     } catch (e) {
+      // Provide more detailed error message
+      final errorMessage = e.toString();
+      if (errorMessage.contains('PlatformException')) {
+        if (errorMessage.contains('sign_in_failed') || errorMessage.contains('SIGN_IN_REQUIRED')) {
+          return AuthResult.failure('Google Sign-In failed. Please check your Firebase configuration and SHA-1 fingerprint.');
+        } else if (errorMessage.contains('network_error') || errorMessage.contains('NETWORK_ERROR')) {
+          return AuthResult.failure('Network error. Please check your internet connection.');
+        }
+      }
       return AuthResult.failure('Google sign in error: $e');
     }
   }
