@@ -103,7 +103,7 @@ sudo systemctl restart tapmap
 echo -e "${YELLOW}🌐 Setting up Nginx...${NC}"
 sudo tee /etc/nginx/sites-available/tapmap > /dev/null << EOL
 server {
-    listen 80;
+    listen 80 default_server;
     server_name _;  # Listen on all IPs
 
     location / {
