@@ -11,8 +11,9 @@ class AuthService {
   static const String _userKey = 'user_data';
   
   final GoogleSignIn _googleSignIn = GoogleSignIn(
-    // Web Client ID (needed for Web and to get ID token on Mobile)
-    clientId: '500324905447-1nicspq57p31pdom8ic4a1fa129lbceq.apps.googleusercontent.com',
+    // For Android, don't specify clientId - it will use the one from google-services.json
+    // For Web/iOS, you may need to specify the clientId
+    // clientId: '500324905447-1nicspq57p31pdom8ic4a1fa129lbceq.apps.googleusercontent.com',
   );
 
   /// Sign up with email and password

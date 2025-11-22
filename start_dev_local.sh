@@ -152,7 +152,7 @@ fi
 # Start Flutter app
 echo -e "${GREEN}Starting Flutter app...${NC}"
 cd "$PROJECT_ROOT/tapmap_app"
-flutter run -d chrome
+flutter run -d chrome --dart-define=API_URL=http://localhost:3000/api
 
 # Cleanup when Flutter app exits
 cleanup

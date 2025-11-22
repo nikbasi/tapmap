@@ -286,14 +286,14 @@ class _FountainMapState extends State<FountainMap> {
       // Esri World Imagery - free satellite imagery
       return TileLayer(
         urlTemplate: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-        userAgentPackageName: 'com.example.tapmap',
+        userAgentPackageName: 'com.dbasi.tapmap',
         maxZoom: 19,
       );
     } else {
       // OpenStreetMap for street view
       return TileLayer(
         urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-        userAgentPackageName: 'com.example.tapmap',
+        userAgentPackageName: 'com.dbasi.tapmap',
         maxZoom: 19,
       );
     }
