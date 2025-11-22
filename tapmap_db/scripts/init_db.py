@@ -122,6 +122,34 @@ def run_sql_file(conn, file_path):
         conn.rollback()
         return False
 
+def reset_password(host, port, user, password):
+    """Reset the password for the user."""
+    print(f"\n⚠️  Authentication failed for user '{user}'.")
+    print(f"The password in the database does not match the one in .env.")
+    
+    response = input(f"Do you want to reset the password for '{user}' to the one in .env? (y/n): ")
+    if response.lower() != 'y':
+        return False
+        
+    print(f"Resetting password for '{user}'...")
+    conn = get_superuser_connection(host, port)
+    if not conn:
+        return False
+        
+    try:
+        cur = conn.cursor()
+        cur.execute(f"ALTER USER {user} WITH PASSWORD '{password}'")
+        conn.commit()
+        cur.close()
+        conn.close()
+        print(f"✅ Password for '{user}' has been updated.")
+        return True
+    except Exception as e:
+        print(f"❌ Error resetting password: {e}")
+        if conn:
+            conn.close()
+        return False
+
 def init_db():
     print("🚀 Initializing TapMap Database...")
     config = get_target_config()
@@ -148,6 +176,23 @@ def init_db():
     try:
         print(f"Connecting to '{config['dbname']}' as '{config['user']}'...")
         conn = psycopg2.connect(**config)
+    except psycopg2.OperationalError as e:
+        if "password authentication failed" in str(e):
+            # Try to reset password
+            if reset_password(config['host'], config['port'], config['user'], config['password']):
+                # Retry connection
+                try:
+                    print(f"Retrying connection to '{config['dbname']}'...")
+                    conn = psycopg2.connect(**config)
+                except Exception as e2:
+                    print(f"❌ Error connecting to database after password reset: {e2}")
+                    sys.exit(1)
+            else:
+                print(f"❌ Authentication failed. Please check your .env file.")
+                sys.exit(1)
+        else:
+            print(f"❌ Error connecting to database: {e}")
+            sys.exit(1)
     except Exception as e:
         print(f"❌ Error connecting to database: {e}")
         print("   Double check your password in .env matches the database user.")
