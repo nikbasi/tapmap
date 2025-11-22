@@ -345,7 +345,6 @@ class _FountainMapState extends State<FountainMap> {
 
       final destLat = fountain.latitude;
       final destLng = fountain.longitude;
-      final name = Uri.encodeComponent(fountain.name);
       
       Uri googleMapsUrl;
       
@@ -354,22 +353,23 @@ class _FountainMapState extends State<FountainMap> {
         final originLat = userPosition.latitude;
         final originLng = userPosition.longitude;
         googleMapsUrl = Uri.parse(
-          'https://www.google.com/maps/dir/?api=1&origin=$originLat,$originLng&destination=$destLat,$destLng&destination_place_id=$name'
+          'https://www.google.com/maps/dir/?api=1&origin=$originLat,$originLng&destination=$destLat,$destLng'
         );
       } else {
         // Fallback: just show destination (Google Maps will use current location)
         googleMapsUrl = Uri.parse(
-          'https://www.google.com/maps/dir/?api=1&destination=$destLat,$destLng&destination_place_id=$name'
+          'https://www.google.com/maps/dir/?api=1&destination=$destLat,$destLng'
         );
       }
       
-      if (await canLaunchUrl(googleMapsUrl)) {
-        await launchUrl(
-          googleMapsUrl,
-          mode: LaunchMode.externalApplication,
-        );
-      } else {
-        throw Exception('Cannot launch Google Maps URL');
+      // Try to launch Google Maps
+      // On Android, this will open the Google Maps app if installed, otherwise the browser
+      final launched = await launchUrl(
+        googleMapsUrl,
+        mode: LaunchMode.externalApplication,
+      );
+      if (!launched) {
+        throw Exception('Could not launch Google Maps. Please make sure Google Maps is installed.');
       }
     } catch (e) {
       // Show error message if launch fails
