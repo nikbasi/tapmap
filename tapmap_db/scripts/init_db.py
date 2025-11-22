@@ -26,24 +26,33 @@ def get_superuser_connection(host, port):
             dbname='postgres',
             user='postgres',
             host=host,
-            port=port
+            port=port,
+            password=''
         )
         conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
         return conn
-    except psycopg2.OperationalError:
-        # If that fails, maybe the user running the script is a superuser (e.g. 'ubuntu' or 'tapmap')
+    except psycopg2.OperationalError as e:
+        # If that fails, it might need a password
+        print(f"⚠️  Could not connect to 'postgres' without password.")
+        print(f"   Error: {e}")
+        
+        import getpass
+        print("\nPlease enter the password for the 'postgres' superuser:")
+        password = getpass.getpass("Password: ")
+        
         try:
             conn = psycopg2.connect(
                 dbname='postgres',
+                user='postgres',
                 host=host,
-                port=port
+                port=port,
+                password=password
             )
             conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
             return conn
-        except Exception as e:
-            print(f"❌ Could not connect to 'postgres' database to perform setup.")
-            print(f"   Error: {e}")
-            print("   Please ensure you have superuser access or the 'postgres' user is accessible.")
+        except Exception as e2:
+            print(f"❌ Could not connect to 'postgres' database with provided password.")
+            print(f"   Error: {e2}")
             return None
 
 def create_role_if_missing(conn, user, password):
