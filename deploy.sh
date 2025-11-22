@@ -89,7 +89,7 @@ User=$USER
 Group=$GROUP
 WorkingDirectory=$API_DIR
 Environment="PATH=$API_DIR/.venv/bin"
-ExecStart=$API_DIR/.venv/bin/gunicorn --workers 3 --bind unix:tapmap.sock -m 007 app:app
+ExecStart=$API_DIR/.venv/bin/gunicorn --workers 3 --bind 127.0.0.1:8000 app:app
 
 [Install]
 WantedBy=multi-user.target
@@ -108,7 +108,7 @@ server {
 
     location / {
         include proxy_params;
-        proxy_pass http://unix:$API_DIR/tapmap.sock;
+        proxy_pass http://127.0.0.1:8000;
     }
 }
 EOL
