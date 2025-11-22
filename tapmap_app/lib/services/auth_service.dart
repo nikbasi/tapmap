@@ -2,9 +2,10 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import '../config/api_config.dart';
 
 class AuthService {
-  static const String baseUrl = 'http://localhost:3000/api';
+  static const String baseUrl = ApiConfig.baseUrl;
   static const _storage = FlutterSecureStorage();
   static const String _tokenKey = 'auth_token';
   static const String _userKey = 'user_data';

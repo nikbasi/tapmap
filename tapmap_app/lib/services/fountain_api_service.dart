@@ -1,14 +1,13 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../config/api_config.dart';
 import '../models/map_result.dart';
 import '../models/fountain.dart';
 import '../models/fountain_cluster.dart';
 import '../models/fountain_filters.dart';
 
 class FountainApiService {
-  // TODO: Replace with your actual backend API URL
-  // For now, this is a placeholder that you'll need to configure
-  static const String baseUrl = 'http://localhost:3000/api';
+  static const String baseUrl = ApiConfig.baseUrl;
   
   /// Fetches fountains for the current map view
   /// The backend should call get_fountains_for_map_view() which automatically
